@@ -233,9 +233,6 @@ fun AppNavigation(
                 Screen.HOME -> ClientHomeScreen(
                     mainViewModel = mainViewModel,
                     onNavigateToNewOrder = { currentScreen = Screen.NEW_ORDER },
-                    onNavigateToCalculator = {
-                        if (isStaff) currentScreen = Screen.CALCULATOR
-                    },
                     onNavigateToNotifications = { currentScreen = Screen.NOTIFICATIONS },
                     onNavigateToComplaints = { currentScreen = Screen.COMPLAINTS }
                 )

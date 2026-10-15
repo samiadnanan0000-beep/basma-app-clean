@@ -69,7 +69,7 @@ import com.example.ui.viewmodel.MainViewModel
 fun ClientHomeScreen(
     mainViewModel: MainViewModel,
     onNavigateToNewOrder: () -> Unit,
-    onNavigateToCalculator: () -> Unit,
+    onNavigateToCalculator: (() -> Unit)? = null,
     onNavigateToNotifications: () -> Unit,
     onNavigateToComplaints: () -> Unit
 ) {
@@ -307,37 +307,6 @@ fun ClientHomeScreen(
                             text = "تسعير ومقاسات",
                             style = MaterialTheme.typography.labelSmall,
                             color = Color.White.copy(alpha = 0.8f)
-                        )
-                    }
-                }
-
-                // Calculator Button
-                Card(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(96.dp)
-                        .clickable { onNavigateToCalculator() }
-                        .testTag("quick_calculator_button"),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(14.dp),
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Icon(Icons.Default.Calculate, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "حاسبة التكلفة",
-                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = "كلادنج وحديد وليد",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                         )
                     }
                 }
