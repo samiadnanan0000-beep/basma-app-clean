@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Outer Glow Circle -->
+    <path
+        android:fillColor="#1A0381FE"
+        android:pathData="M54,20 C72.78,20 88,35.22 88,54 C88,72.78 72.78,88 54,88 C35.22,88 20,72.78 20,54 C20,35.22 35.22,20 54,20 Z" />
+    
+    <!-- Fingerprint Arch 1 (Outer Ridge) -->
+    <path
+        android:strokeColor="#0381FE"
+        android:strokeWidth="3.2"
+        android:strokeLineCap="round"
+        android:pathData="M34,58 C34,42 43,30 54,30 C65,30 74,42 74,58 C74,68 70,76 66,80" />
+
+    <!-- Fingerprint Arch 2 (Mid Ridge) -->
+    <path
+        android:strokeColor="#38BDF8"
+        android:strokeWidth="3.2"
+        android:strokeLineCap="round"
+        android:pathData="M40,64 C40,46 47,37 54,37 C61,37 68,46 68,64 C68,70 65,75 62,77" />
+
+    <!-- Fingerprint Arch 3 (Inner Ridge) -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3.2"
+        android:strokeLineCap="round"
+        android:pathData="M46,68 C46,51 50,44 54,44 C58,44 62,51 62,68 C62,71 60,74 58,75" />
+
+    <!-- Core Dot / Center Loop -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3.2"
+        android:strokeLineCap="round"
+        android:pathData="M54,54 L54,70" />
+
+    <!-- Floating Sparkle Accent (Print / Creativity Star) -->
+    <path
+        android:fillColor="#FBBF24"
+        android:pathData="M73,26 L75,31 L80,33 L75,35 L73,40 L71,35 L66,33 L71,31 Z" />
+</vector>

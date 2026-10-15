@@ -1,0 +1,50 @@
+<resources>
+    <string name="app_name">بَصْمَة</string>
+    <string name="app_tagline">للدعاية والإعلان والطباعة الرقمية واللوحات</string>
+
+    <!-- Navigation & Roles -->
+    <string name="role_super_admin">المدير العام والمصمم الأساسي</string>
+    <string name="role_designer">مصمم معتمد</string>
+    <string name="role_client">عميل الاستوديو</string>
+    <string name="switch_to_client_mode">التبديل إلى وضع العميل</string>
+    <string name="back_to_designer_hub">العودة إلى لوحة المصمم</string>
+
+    <!-- Bottom Nav Tabs -->
+    <string name="nav_home">الرئيسية</string>
+    <string name="nav_new_order">طلب جديد</string>
+    <string name="nav_my_orders">طلباتي</string>
+    <string name="nav_notifications">الإشعارات</string>
+    <string name="nav_complaints">الشكاوى والمقترحات</string>
+    <string name="nav_designer_hub">لوحة المصمم</string>
+    <string name="nav_calculator">حاسبة الإنتاج</string>
+    <string name="nav_materials">الخامات والأسعار</string>
+    <string name="nav_settings">الإعدادات</string>
+
+    <!-- Order Statuses -->
+    <string name="status_pending">🟡 بانتظار التسعير</string>
+    <string name="status_quoted">🔵 تم تحديد السعر والموعد</string>
+    <string name="status_in_production">🟢 قيد التنفيذ بالمطبعة</string>
+    <string name="status_completed">🏁 جاهز للتسليم والتركيب</string>
+
+    <!-- Biometric & Auth -->
+    <string name="biometric_title">تأكيد الهوية - تطبيق بَصْمَة</string>
+    <string name="biometric_subtitle">استخدم البصمة أو الوجه للدخول الآمن</string>
+    <string name="biometric_negative">استخدام رمز PIN</string>
+    <string name="pin_prompt">أدخل رمز المرور PIN المكون من 4 أرقام</string>
+    <string name="pin_incorrect">رمز المرور غير صحيح</string>
+    <string name="biometric_lock_active">التطبيق مقفل ببصمة الإصبع</string>
+    <string name="unlock_button">فتح القفل الآن</string>
+
+    <!-- Actions & Buttons -->
+    <string name="submit_order">إرسال طلب العمل</string>
+    <string name="approve_proof">اعتماد التصميم والبدء</string>
+    <string name="request_revisions">طلب تعديلات على البروفة</string>
+    <string name="contact_whatsapp">مراسلة عبر واتساب</string>
+    <string name="sign_in_google">تسجيل الدخول بحساب Google</string>
+    <string name="sign_out">تسجيل الخروج</string>
+    <string name="cancel">إلغاء</string>
+    <string name="save">حفظ</string>
+    <string name="confirm">تأكيد</string>
+    <string name="delete">حذف</string>
+    <string name="reply">رد وإغلاق</string>
+</resources>

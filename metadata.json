@@ -1,0 +1,6 @@
+{
+  "name": "بَصْمَة",
+  "description": "منصة ذكية لإدارة وتتبع أعمال الدعاية والطباعة واللوحات الإعلانية بدقة واحترافية",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

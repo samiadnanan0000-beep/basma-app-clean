@@ -1,0 +1,141 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with role authentication and contact details",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "role": { "type": "string", "enum": ["super_admin", "designer", "client"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "name", "role"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Signage, branding, and printing project order",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "clientId": { "type": "string" },
+        "clientName": { "type": "string" },
+        "clientPhone": { "type": "string" },
+        "category": { "type": "string" },
+        "materialId": { "type": "string" },
+        "materialName": { "type": "string" },
+        "width": { "type": "number" },
+        "height": { "type": "number" },
+        "brandText": { "type": "string" },
+        "contactDetails": { "type": "string" },
+        "notes": { "type": "string" },
+        "logoUrl": { "type": "string" },
+        "sitePhotoUrl": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "quoted", "in_production", "completed"] },
+        "price": { "type": "number" },
+        "currency": { "type": "string" },
+        "turnaroundTime": { "type": "string" },
+        "proofUrl": { "type": "string" },
+        "proofApproved": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["clientId", "category", "status"]
+    },
+    "Material": {
+      "title": "Material",
+      "description": "Advertising, cladding, and signage materials inventory",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "unitType": { "type": "string" },
+        "pricePerUnit": { "type": "number" },
+        "currency": { "type": "string" },
+        "inStock": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "unitType", "pricePerUnit"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "Real-time alert or announcement for client or broadcast",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string", "enum": ["offer", "order", "general", "complaint"] },
+        "targetId": { "type": "string" },
+        "isRead": { "type": "boolean" },
+        "relatedId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "message", "type", "targetId"]
+    },
+    "Complaint": {
+      "title": "Complaint",
+      "description": "Client suggestion, complaint, or inquiry ticket",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "clientId": { "type": "string" },
+        "clientName": { "type": "string" },
+        "clientPhone": { "type": "string" },
+        "type": { "type": "string", "enum": ["complaint", "suggestion", "inquiry"] },
+        "subject": { "type": "string" },
+        "message": { "type": "string" },
+        "orderId": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "resolved"] },
+        "replyMessage": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "resolvedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["clientId", "type", "subject", "message", "status"]
+    },
+    "Offer": {
+      "title": "Offer",
+      "description": "Studio promotional offer or portfolio showcase item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "discountBadge": { "type": "string" },
+        "category": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "description", "imageUrl"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile with role and privileges"
+    },
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Orders submitted by clients and managed by designers"
+    },
+    "/materials/{materialId}": {
+      "schema": "Material",
+      "description": "Materials list for pricing and calculator"
+    },
+    "/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "System and order notifications"
+    },
+    "/complaints/{complaintId}": {
+      "schema": "Complaint",
+      "description": "Client complaints and suggestions desk"
+    },
+    "/offers/{offerId}": {
+      "schema": "Offer",
+      "description": "Showcase portfolio and offers"
+    }
+  }
+}

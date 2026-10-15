@@ -1,0 +1,68 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isSuperAdminUser() {
+      return isSignedIn() && (
+        request.auth.token.email == 'samialbakri99@gmail.com' ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'super_admin'
+      );
+    }
+
+    function isStaff() {
+      return isSignedIn() && (
+        isSuperAdminUser() ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['super_admin', 'designer']
+      );
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    match /users/{userId} {
+      allow read: if isSignedIn() && (isOwner(userId) || isStaff());
+      allow create: if isSignedIn() && isOwner(userId);
+      allow update: if isSignedIn() && (isOwner(userId) || isStaff());
+      allow delete: if isSuperAdminUser();
+    }
+
+    match /orders/{orderId} {
+      allow read: if isSignedIn() && (isStaff() || resource.data.clientId == request.auth.uid);
+      allow create: if isSignedIn() && request.resource.data.clientId == request.auth.uid;
+      allow update: if isSignedIn() && (isStaff() || resource.data.clientId == request.auth.uid);
+      allow delete: if isStaff();
+    }
+
+    match /materials/{materialId} {
+      allow read: if isSignedIn();
+      allow write: if isStaff();
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if isSignedIn() && (
+        isStaff() ||
+        resource.data.targetId == 'all' ||
+        resource.data.targetId == request.auth.uid
+      );
+      allow create, update: if isSignedIn();
+      allow delete: if isStaff() || (isSignedIn() && resource.data.targetId == request.auth.uid);
+    }
+
+    match /complaints/{complaintId} {
+      allow read: if isSignedIn() && (isStaff() || resource.data.clientId == request.auth.uid);
+      allow create: if isSignedIn() && request.resource.data.clientId == request.auth.uid;
+      allow update: if isSignedIn() && (isStaff() || resource.data.clientId == request.auth.uid);
+      allow delete: if isStaff();
+    }
+
+    match /offers/{offerId} {
+      allow read: if isSignedIn();
+      allow write: if isStaff();
+    }
+  }
+}
