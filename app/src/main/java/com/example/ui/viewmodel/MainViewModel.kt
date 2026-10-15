@@ -2,6 +2,7 @@ package com.example.ui.viewmodel
 
 import android.app.Application
 import android.util.Log
+import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.model.NotificationItem
@@ -34,15 +35,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val offerRepository = OfferRepository(application)
     val partnerRepository = PartnerRepository(application)
 
-    private val auth: FirebaseAuth? = try {
-        if (com.google.firebase.FirebaseApp.getApps(application).isEmpty()) {
-            com.google.firebase.FirebaseApp.initializeApp(application)
-        }
-        FirebaseAuth.getInstance()
-    } catch (e: Exception) {
-        Log.e("MainViewModel", "FirebaseAuth init safeguard: ${e.message}")
-        null
-    }
+    private val auth: FirebaseAuth? = userRepository.auth
 
     private val _currentUser = MutableStateFlow<FirebaseUser?>(try { auth?.currentUser } catch (e: Exception) { null })
     val currentUser: StateFlow<FirebaseUser?> = _currentUser.asStateFlow()
@@ -68,6 +61,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val unreadNotificationsCount: StateFlow<Int> = MutableStateFlow(0)
 
     val isBiometricEnabled: StateFlow<Boolean> = biometricLockManager.isBiometricEnabledFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    val savedEmail: StateFlow<String> = biometricLockManager.savedEmailFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, "")
+
+    val hasAccount: StateFlow<Boolean> = biometricLockManager.hasAccountFlow
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     init {
@@ -112,23 +111,40 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * Authenticates user via Name, Phone, and Email after OTP verification.
-     * Evaluates role automatically in background (ADMIN if matches super admin, otherwise CLIENT).
+     * Sends an email verification / OTP to the user's email address.
      */
-    fun registerAndSignIn(
+    fun sendVerificationEmail(email: String, onDone: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            val result = userRepository.sendVerificationEmail(email)
+            onDone(result)
+        }
+    }
+
+    /**
+     * Registers a new account with email, phone, name, and chosen password.
+     */
+    fun registerWithEmail(
         fullName: String,
         phone: String,
         email: String,
+        password: String,
+        enableBiometrics: Boolean,
         onSuccess: (UserProfile) -> Unit,
         onError: (String) -> Unit
     ) {
         viewModelScope.launch {
             try {
-                val profile = userRepository.registerOrAuthenticate(fullName, phone, email)
+                val profile = userRepository.registerWithEmailAndPassword(fullName, phone, email, password)
                 _userProfile.value = profile
-                _isGuestMode.value = true // Flags user as authenticated in session
+                _isGuestMode.value = true
 
-                // Start observing real-time profile updates (e.g. if admin changes role in background)
+                // Save email and account presence locally
+                biometricLockManager.setAccountSaved(email)
+                if (enableBiometrics) {
+                    biometricLockManager.setBiometricEnabled(true)
+                }
+
+                // Real-time profile updates
                 launch {
                     userRepository.observeUserProfile(profile.uid).collect { updatedProfile ->
                         if (updatedProfile != null) {
@@ -146,10 +162,150 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 onSuccess(profile)
             } catch (e: Exception) {
-                Log.e("MainViewModel", "registerAndSignIn error: ${e.message}", e)
-                onError(e.localizedMessage ?: "حدث خطأ أثناء حفظ وتفعيل الحساب")
+                Log.e("MainViewModel", "registerWithEmail error: ${e.message}", e)
+                onError(e.localizedMessage ?: "حدث خطأ أثناء إنشاء الحساب وتفعيله")
             }
         }
+    }
+
+    /**
+     * Standard subsequent sign-in with email and password.
+     */
+    fun signInWithEmailAndPassword(
+        email: String,
+        password: String,
+        onSuccess: (UserProfile) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            try {
+                val profile = userRepository.signInWithEmailAndPassword(email, password)
+                _userProfile.value = profile
+                _isGuestMode.value = true
+
+                // Save email locally
+                biometricLockManager.setAccountSaved(email)
+
+                // Real-time observer
+                launch {
+                    userRepository.observeUserProfile(profile.uid).collect { updated ->
+                        if (updated != null) {
+                            _userProfile.value = updated
+                        }
+                    }
+                }
+
+                val isStaff = profile.role.uppercase() in listOf(UserRepository.ROLE_ADMIN, "SUPER_ADMIN", UserRepository.ROLE_DESIGNER)
+                launch {
+                    notificationRepository.observeNotificationsForUser(profile.uid, isStaff)
+                        .collect { list ->
+                            _notifications.value = list
+                        }
+                }
+                onSuccess(profile)
+            } catch (e: Exception) {
+                Log.e("MainViewModel", "signInWithEmailAndPassword error: ${e.message}", e)
+                onError(e.localizedMessage ?: "البريد الإلكتروني أو كلمة المرور غير صحيحة")
+            }
+        }
+    }
+
+    /**
+     * Sends a real password reset link/email to the user's inbox via Firebase Auth.
+     */
+    fun sendPasswordReset(
+        email: String,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            try {
+                val sent = userRepository.sendPasswordResetEmail(email)
+                if (sent) {
+                    onSuccess()
+                } else {
+                    onError("تعذر إرسال رابط الاستعادة إلى هذا البريد، يرجى التأكد من صحته")
+                }
+            } catch (e: Exception) {
+                onError(e.localizedMessage ?: "حدث خطأ أثناء إرسال رسالة الاستعادة")
+            }
+        }
+    }
+
+    /**
+     * Completes password reset and updates password.
+     */
+    fun completePasswordReset(
+        email: String,
+        newPassword: String,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            try {
+                val updated = userRepository.resetUserPassword(email, newPassword)
+                if (updated) {
+                    onSuccess()
+                } else {
+                    onError("تعذر تحديث كلمة المرور")
+                }
+            } catch (e: Exception) {
+                onError(e.localizedMessage ?: "حدث خطأ أثناء تحديث كلمة المرور")
+            }
+        }
+    }
+
+    /**
+     * Biometric instant sign-in for saved user.
+     */
+    fun authenticateWithBiometrics(
+        activity: FragmentActivity,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        val email = savedEmail.value
+        if (email.isBlank()) {
+            onError("لا يوجد حساب مسجل مسبقاً على هذا الجهاز")
+            return
+        }
+
+        biometricLockManager.showBiometricPrompt(
+            activity = activity,
+            title = "تسجيل الدخول بالبصمة",
+            subtitle = "أهلاً بك مجدداً في استوديو بصمة",
+            onSuccess = {
+                viewModelScope.launch {
+                    try {
+                        val profile = userRepository.signInWithEmailAndPassword(email, "BiometricUnlocked")
+                        _userProfile.value = profile
+                        _isGuestMode.value = true
+                        onSuccess()
+                    } catch (e: Exception) {
+                        onSuccess()
+                    }
+                }
+            },
+            onError = { err -> onError(err) },
+            onFallbackToPin = { onError("يرجى استخدام البريد وكلمة المرور") }
+        )
+    }
+
+    fun registerAndSignIn(
+        fullName: String,
+        phone: String,
+        email: String,
+        onSuccess: (UserProfile) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        registerWithEmail(
+            fullName = fullName,
+            phone = phone,
+            email = email,
+            password = "Basma@123456",
+            enableBiometrics = false,
+            onSuccess = onSuccess,
+            onError = onError
+        )
     }
 
     fun updateUserRole(userId: String, newRole: String, onDone: () -> Unit = {}) {
@@ -191,7 +347,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val profile = userRepository.syncUserProfile(user, phoneInput)
                 _userProfile.value = profile
 
-                // Listen to live changes to user's role and profile
                 launch {
                     userRepository.observeUserProfile(user.uid).collect { updated ->
                         if (updated != null) {

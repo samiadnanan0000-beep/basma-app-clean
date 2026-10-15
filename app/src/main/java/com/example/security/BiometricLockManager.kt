@@ -19,6 +19,8 @@ class BiometricLockManager(private val context: Context) {
     companion object {
         val KEY_BIOMETRIC_ENABLED = booleanPreferencesKey("biometric_enabled")
         val KEY_USER_PIN = stringPreferencesKey("user_pin")
+        val KEY_SAVED_EMAIL = stringPreferencesKey("saved_email")
+        val KEY_HAS_ACCOUNT = booleanPreferencesKey("has_account")
         const val DEFAULT_PIN = "1234"
     }
 
@@ -30,6 +32,14 @@ class BiometricLockManager(private val context: Context) {
         prefs[KEY_USER_PIN] ?: DEFAULT_PIN
     }
 
+    val savedEmailFlow: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[KEY_SAVED_EMAIL] ?: ""
+    }
+
+    val hasAccountFlow: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[KEY_HAS_ACCOUNT] ?: false
+    }
+
     suspend fun setBiometricEnabled(enabled: Boolean) {
         context.dataStore.edit { prefs ->
             prefs[KEY_BIOMETRIC_ENABLED] = enabled
@@ -39,6 +49,13 @@ class BiometricLockManager(private val context: Context) {
     suspend fun setUserPin(pin: String) {
         context.dataStore.edit { prefs ->
             prefs[KEY_USER_PIN] = pin
+        }
+    }
+
+    suspend fun setAccountSaved(email: String) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_SAVED_EMAIL] = email
+            prefs[KEY_HAS_ACCOUNT] = true
         }
     }
 

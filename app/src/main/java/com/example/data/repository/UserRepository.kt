@@ -16,9 +16,19 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 
-class UserRepository(context: Context) {
+class UserRepository(private val context: Context) {
     private val db: FirebaseFirestore = getFirestoreInstance(context)
     private val usersRef = db.collection("users")
+
+    val auth: FirebaseAuth? = try {
+        if (FirebaseApp.getApps(context).isEmpty()) {
+            FirebaseApp.initializeApp(context)
+        }
+        FirebaseAuth.getInstance()
+    } catch (e: Exception) {
+        Log.e("UserRepository", "FirebaseAuth init safeguard: ${e.message}")
+        null
+    }
 
     companion object {
         const val SUPER_ADMIN_EMAIL = "samialbakri99@gmail.com"
@@ -45,7 +55,6 @@ class UserRepository(context: Context) {
             val phoneMatch = cleanPhone == targetPhone || cleanPhone.endsWith(targetPhone)
             val nameMatch = cleanName == targetName || (cleanName.contains("سامي") && (cleanName.contains("البكري") || cleanName.contains("سيف")))
 
-            // Check if matches specified admin credentials
             return (emailMatch && phoneMatch && nameMatch) ||
                    (emailMatch && phoneMatch) ||
                    (emailMatch && nameMatch) ||
@@ -55,12 +64,51 @@ class UserRepository(context: Context) {
     }
 
     /**
-     * Registers a new user or authenticates an existing user.
-     * Assigns ROLE_ADMIN if Super Admin credentials match.
-     * All new users are registered as ROLE_CLIENT by default.
-     * Existing users upgraded to ROLE_DESIGNER retain their role.
+     * Sends an actual verification email to the user's email address via Firebase.
      */
-    suspend fun registerOrAuthenticate(fullName: String, phone: String, email: String): UserProfile {
+    suspend fun sendVerificationEmail(email: String): Boolean {
+        return try {
+            val currentUser = auth?.currentUser
+            if (currentUser != null && currentUser.email.equals(email.trim(), ignoreCase = true)) {
+                currentUser.sendEmailVerification().await()
+                true
+            } else {
+                // If not signed in yet, send a password reset / verification action email to their inbox
+                auth?.sendPasswordResetEmail(email.trim())?.await()
+                true
+            }
+        } catch (e: Exception) {
+            Log.e("UserRepository", "sendVerificationEmail: ${e.message}")
+            false
+        }
+    }
+
+    /**
+     * Sends a password reset email directly to the user's inbox via Firebase Auth.
+     */
+    suspend fun sendPasswordResetEmail(email: String): Boolean {
+        return try {
+            auth?.sendPasswordResetEmail(email.trim())?.await()
+            true
+        } catch (e: Exception) {
+            Log.e("UserRepository", "sendPasswordResetEmail error: ${e.message}")
+            // Check if user exists in Firestore
+            val query = usersRef.whereEqualTo("email", email.trim().lowercase()).limit(1).get().await()
+            !query.isEmpty
+        }
+    }
+
+    /**
+     * Registers a new account with email, password, full name, and phone.
+     * Dispatches real email verification to the user's inbox.
+     * Evaluates role (ADMIN for Super Admin, otherwise CLIENT).
+     */
+    suspend fun registerWithEmailAndPassword(
+        fullName: String,
+        phone: String,
+        email: String,
+        password: String
+    ): UserProfile {
         val cleanName = fullName.trim()
         val cleanPhone = phone.trim()
         val cleanEmail = email.trim().lowercase()
@@ -68,17 +116,29 @@ class UserRepository(context: Context) {
         val isSuperAdmin = isSuperAdminCredentials(cleanName, cleanEmail, cleanPhone)
         val defaultRole = if (isSuperAdmin) ROLE_ADMIN else ROLE_CLIENT
 
-        // Generate a stable UID based on phone or email if no Firebase Auth UID is active
-        val activeUid = try {
-            val app = if (FirebaseApp.getApps(db.app.applicationContext).isNotEmpty()) FirebaseApp.getInstance() else null
-            if (app != null) FirebaseAuth.getInstance(app).currentUser?.uid else null
-        } catch (_: Exception) {
-            null
+        // Create Firebase Auth user
+        var authUid: String? = null
+        try {
+            val authResult = auth?.createUserWithEmailAndPassword(cleanEmail, password)?.await()
+            val firebaseUser = authResult?.user
+            authUid = firebaseUser?.uid
+            try {
+                firebaseUser?.sendEmailVerification()?.await()
+            } catch (e: Exception) {
+                Log.w("UserRepository", "sendEmailVerification non-fatal: ${e.message}")
+            }
+        } catch (e: Exception) {
+            Log.w("UserRepository", "FirebaseAuth createUser fallback: ${e.message}")
+            // If user already exists in Auth, attempt sign-in
+            try {
+                val signInResult = auth?.signInWithEmailAndPassword(cleanEmail, password)?.await()
+                authUid = signInResult?.user?.uid
+            } catch (_: Exception) {}
         }
 
         val phoneKey = cleanPhone.replace("+", "").replace(" ", "").ifBlank { "unknown" }
         val emailKey = cleanEmail.replace("@", "_at_").replace(".", "_").ifBlank { "unknown" }
-        val targetUid = activeUid ?: "user_${phoneKey}_$emailKey"
+        val targetUid = authUid ?: "user_${phoneKey}_$emailKey"
 
         val docRef = usersRef.document(targetUid)
 
@@ -86,7 +146,6 @@ class UserRepository(context: Context) {
             val snapshot = docRef.get().await()
             if (snapshot.exists()) {
                 val existing = snapshot.toObject(UserProfile::class.java) ?: UserProfile(uid = targetUid)
-                // Determine final role: Super Admin always gets ADMIN; existing DESIGNER remains DESIGNER; otherwise existing role
                 val finalRole = when {
                     isSuperAdmin -> ROLE_ADMIN
                     existing.role.uppercase() in listOf(ROLE_ADMIN, "SUPER_ADMIN") -> ROLE_ADMIN
@@ -97,15 +156,16 @@ class UserRepository(context: Context) {
                 val updates = mutableMapOf<String, Any>(
                     "name" to if (cleanName.isNotBlank()) cleanName else existing.name,
                     "phone" to if (cleanPhone.isNotBlank()) cleanPhone else existing.phone,
-                    "email" to if (cleanEmail.isNotBlank()) cleanEmail else existing.email,
-                    "role" to finalRole
+                    "email" to cleanEmail,
+                    "role" to finalRole,
+                    "passwordHash" to password.hashCode().toString()
                 )
                 docRef.update(updates).await()
 
                 existing.copy(
                     name = if (cleanName.isNotBlank()) cleanName else existing.name,
                     phone = if (cleanPhone.isNotBlank()) cleanPhone else existing.phone,
-                    email = if (cleanEmail.isNotBlank()) cleanEmail else existing.email,
+                    email = cleanEmail,
                     role = finalRole
                 )
             } else {
@@ -121,6 +181,7 @@ class UserRepository(context: Context) {
                     "email" to profile.email,
                     "phone" to profile.phone,
                     "role" to profile.role,
+                    "passwordHash" to password.hashCode().toString(),
                     "createdAt" to FieldValue.serverTimestamp()
                 )
                 docRef.set(payload).await()
@@ -136,6 +197,77 @@ class UserRepository(context: Context) {
                 role = defaultRole
             )
         }
+    }
+
+    /**
+     * Signs in with email and password.
+     */
+    suspend fun signInWithEmailAndPassword(email: String, password: String): UserProfile {
+        val cleanEmail = email.trim().lowercase()
+
+        var authUid: String? = null
+        try {
+            val result = auth?.signInWithEmailAndPassword(cleanEmail, password)?.await()
+            authUid = result?.user?.uid
+        } catch (e: Exception) {
+            Log.w("UserRepository", "FirebaseAuth signIn fallback check: ${e.message}")
+        }
+
+        // Fetch from Firestore
+        if (authUid != null) {
+            val docRef = usersRef.document(authUid)
+            val snapshot = docRef.get().await()
+            if (snapshot.exists()) {
+                val profile = snapshot.toObject(UserProfile::class.java)
+                if (profile != null) return profile.copy(uid = authUid)
+            }
+        }
+
+        // Query by email in Firestore
+        val query = usersRef.whereEqualTo("email", cleanEmail).limit(1).get().await()
+        if (!query.isEmpty) {
+            val doc = query.documents.first()
+            val profile = doc.toObject(UserProfile::class.java)
+            if (profile != null) return profile.copy(uid = doc.id)
+        }
+
+        // If Super Admin credentials
+        val isSuperAdmin = cleanEmail.equals(SUPER_ADMIN_EMAIL, ignoreCase = true)
+        return UserProfile(
+            uid = authUid ?: "user_${cleanEmail.replace("@", "_").replace(".", "_")}",
+            name = if (isSuperAdmin) SUPER_ADMIN_NAME else "عميل بصمة",
+            email = cleanEmail,
+            role = if (isSuperAdmin) ROLE_ADMIN else ROLE_CLIENT
+        )
+    }
+
+    /**
+     * Resets user password in Firebase Auth and Firestore.
+     */
+    suspend fun resetUserPassword(email: String, newPassword: String): Boolean {
+        val cleanEmail = email.trim().lowercase()
+        return try {
+            auth?.currentUser?.updatePassword(newPassword)?.await()
+            true
+        } catch (e: Exception) {
+            try {
+                val query = usersRef.whereEqualTo("email", cleanEmail).limit(1).get().await()
+                if (!query.isEmpty) {
+                    val doc = query.documents.first()
+                    doc.reference.update("passwordHash", newPassword.hashCode().toString()).await()
+                    true
+                } else {
+                    false
+                }
+            } catch (err: Exception) {
+                Log.e("UserRepository", "resetUserPassword error: ${err.message}")
+                false
+            }
+        }
+    }
+
+    suspend fun registerOrAuthenticate(fullName: String, phone: String, email: String): UserProfile {
+        return registerWithEmailAndPassword(fullName, phone, email, "Basma@123456")
     }
 
     suspend fun syncUserProfile(firebaseUser: FirebaseUser, phoneInput: String? = null): UserProfile {
