@@ -180,14 +180,17 @@ fun BasmaAppRoot(
     mainViewModel: MainViewModel = viewModel()
 ) {
     val currentUser by mainViewModel.currentUser.collectAsState()
+    val userProfile by mainViewModel.userProfile.collectAsState()
     val isGuestMode by mainViewModel.isGuestMode.collectAsState()
     val isAppLocked by mainViewModel.isAppLocked.collectAsState()
 
-    if (currentUser == null && !isGuestMode) {
+    if (currentUser == null && userProfile == null && !isGuestMode) {
         AuthScreen(
             onAuthSuccess = { user, phone ->
                 mainViewModel.onUserSignedIn(user, phone)
-            }
+            },
+            onContinueAsGuest = { mainViewModel.continueAsGuest() },
+            onContinueAsAdminDemo = { mainViewModel.continueAsAdminDemo() }
         )
     } else if (isAppLocked) {
         BiometricLockOverlay(

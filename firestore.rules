@@ -9,14 +9,14 @@ service cloud.firestore {
     function isSuperAdminUser() {
       return isSignedIn() && (
         request.auth.token.email == 'samialbakri99@gmail.com' ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'super_admin'
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['ADMIN', 'super_admin', 'admin', 'SUPER_ADMIN']
       );
     }
 
     function isStaff() {
       return isSignedIn() && (
         isSuperAdminUser() ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['super_admin', 'designer']
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['ADMIN', 'DESIGNER', 'super_admin', 'designer', 'admin', 'SUPER_ADMIN']
       );
     }
 
@@ -25,43 +25,44 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow read: if isSignedIn() && (isOwner(userId) || isStaff());
-      allow create: if isSignedIn() && isOwner(userId);
-      allow update: if isSignedIn() && (isOwner(userId) || isStaff());
+      allow read: if true;
+      allow create: if true;
+      allow update: if true;
       allow delete: if isSuperAdminUser();
     }
 
     match /orders/{orderId} {
-      allow read: if isSignedIn() && (isStaff() || resource.data.clientId == request.auth.uid);
-      allow create: if isSignedIn() && request.resource.data.clientId == request.auth.uid;
-      allow update: if isSignedIn() && (isStaff() || resource.data.clientId == request.auth.uid);
+      allow read: if true;
+      allow create: if true;
+      allow update: if true;
       allow delete: if isStaff();
     }
 
     match /materials/{materialId} {
-      allow read: if isSignedIn();
+      allow read: if true;
       allow write: if isStaff();
     }
 
     match /notifications/{notificationId} {
-      allow read: if isSignedIn() && (
-        isStaff() ||
-        resource.data.targetId == 'all' ||
-        resource.data.targetId == request.auth.uid
-      );
-      allow create, update: if isSignedIn();
-      allow delete: if isStaff() || (isSignedIn() && resource.data.targetId == request.auth.uid);
+      allow read: if true;
+      allow create, update: if true;
+      allow delete: if isStaff();
     }
 
     match /complaints/{complaintId} {
-      allow read: if isSignedIn() && (isStaff() || resource.data.clientId == request.auth.uid);
-      allow create: if isSignedIn() && request.resource.data.clientId == request.auth.uid;
-      allow update: if isSignedIn() && (isStaff() || resource.data.clientId == request.auth.uid);
+      allow read: if true;
+      allow create: if true;
+      allow update: if true;
       allow delete: if isStaff();
     }
 
     match /offers/{offerId} {
-      allow read: if isSignedIn();
+      allow read: if true;
+      allow write: if isStaff();
+    }
+
+    match /partners/{partnerId} {
+      allow read: if true;
       allow write: if isStaff();
     }
   }

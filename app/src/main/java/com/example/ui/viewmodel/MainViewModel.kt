@@ -102,7 +102,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 if (user != null) {
                     _isGuestMode.value = false
                     onUserSignedIn(user)
-                } else if (!_isGuestMode.value) {
+                } else if (!_isGuestMode.value && _userProfile.value == null) {
                     _userProfile.value = null
                 }
             }
@@ -111,14 +111,66 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * Authenticates user via Name, Phone, and Email after OTP verification.
+     * Evaluates role automatically in background (ADMIN if matches super admin, otherwise CLIENT).
+     */
+    fun registerAndSignIn(
+        fullName: String,
+        phone: String,
+        email: String,
+        onSuccess: (UserProfile) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            try {
+                val profile = userRepository.registerOrAuthenticate(fullName, phone, email)
+                _userProfile.value = profile
+                _isGuestMode.value = true // Flags user as authenticated in session
+
+                // Start observing real-time profile updates (e.g. if admin changes role in background)
+                launch {
+                    userRepository.observeUserProfile(profile.uid).collect { updatedProfile ->
+                        if (updatedProfile != null) {
+                            _userProfile.value = updatedProfile
+                        }
+                    }
+                }
+
+                val isStaff = profile.role.uppercase() in listOf(UserRepository.ROLE_ADMIN, "SUPER_ADMIN", UserRepository.ROLE_DESIGNER)
+                launch {
+                    notificationRepository.observeNotificationsForUser(profile.uid, isStaff)
+                        .collect { list ->
+                            _notifications.value = list
+                        }
+                }
+                onSuccess(profile)
+            } catch (e: Exception) {
+                Log.e("MainViewModel", "registerAndSignIn error: ${e.message}", e)
+                onError(e.localizedMessage ?: "حدث خطأ أثناء حفظ وتفعيل الحساب")
+            }
+        }
+    }
+
+    fun updateUserRole(userId: String, newRole: String, onDone: () -> Unit = {}) {
+        viewModelScope.launch {
+            try {
+                userRepository.updateUserRole(userId, newRole)
+                onDone()
+            } catch (e: Exception) {
+                Log.e("MainViewModel", "updateUserRole error: ${e.message}", e)
+            }
+        }
+    }
+
     fun continueAsGuest() {
         _isGuestMode.value = true
         _userProfile.value = UserProfile(
             uid = "guest_client",
-            name = "عميل تجريبي (وضع المعاينة)",
+            name = "عميل تجريبي",
             email = "client@example.com",
             phone = "770000000",
-            role = "client"
+            role = UserRepository.ROLE_CLIENT
         )
     }
 
@@ -126,10 +178,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _isGuestMode.value = true
         _userProfile.value = UserProfile(
             uid = "admin_demo",
-            name = "سامي البكري (المدير العام - تجريبي)",
+            name = UserRepository.SUPER_ADMIN_NAME,
             email = UserRepository.SUPER_ADMIN_EMAIL,
             phone = UserRepository.SUPER_ADMIN_PHONE,
-            role = "super_admin"
+            role = UserRepository.ROLE_ADMIN
         )
     }
 
@@ -139,7 +191,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val profile = userRepository.syncUserProfile(user, phoneInput)
                 _userProfile.value = profile
 
-                val isStaff = profile.role in listOf("super_admin", "designer")
+                // Listen to live changes to user's role and profile
+                launch {
+                    userRepository.observeUserProfile(user.uid).collect { updated ->
+                        if (updated != null) {
+                            _userProfile.value = updated
+                        }
+                    }
+                }
+
+                val isStaff = profile.role.uppercase() in listOf(UserRepository.ROLE_ADMIN, "SUPER_ADMIN", UserRepository.ROLE_DESIGNER)
                 notificationRepository.observeNotificationsForUser(user.uid, isStaff)
                     .collect { list ->
                         _notifications.value = list
@@ -164,12 +225,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun isEffectiveStaff(): Boolean {
         if (_previewAsClient.value) return false
-        val role = _userProfile.value?.role ?: "client"
-        return role == "super_admin" || role == "designer"
+        val role = _userProfile.value?.role?.uppercase() ?: UserRepository.ROLE_CLIENT
+        return role == UserRepository.ROLE_ADMIN || role == "SUPER_ADMIN" || role == UserRepository.ROLE_DESIGNER
     }
 
     fun isSuperAdmin(): Boolean {
-        return _userProfile.value?.role == "super_admin"
+        val role = _userProfile.value?.role?.uppercase()
+        return role == UserRepository.ROLE_ADMIN || role == "SUPER_ADMIN"
+    }
+
+    fun isDesigner(): Boolean {
+        val role = _userProfile.value?.role?.uppercase()
+        return role == UserRepository.ROLE_DESIGNER
     }
 
     fun signOut(onComplete: () -> Unit) {

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddCircle
+import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.ChatBubble
@@ -17,9 +18,7 @@ import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.DesignServices
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Inventory2
-import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.SwitchAccount
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
@@ -42,7 +41,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.data.repository.UserRepository
+import com.example.ui.screens.AdminDashboardScreen
 import com.example.ui.screens.ClientHomeScreen
 import com.example.ui.screens.ComplaintsScreen
 import com.example.ui.screens.DesignerHubScreen
@@ -64,6 +64,7 @@ enum class Screen {
     NOTIFICATIONS,
     COMPLAINTS,
     DESIGNER_HUB,
+    ADMIN_DASHBOARD,
     CALCULATOR,
     MATERIALS,
     PARTNERS,
@@ -84,6 +85,10 @@ fun AppNavigation(
 ) {
     val userProfile by mainViewModel.userProfile.collectAsState()
     val isPreviewingAsClient by mainViewModel.previewAsClient.collectAsState()
+
+    val currentRole = userProfile?.role?.uppercase() ?: UserRepository.ROLE_CLIENT
+    val isSuperAdmin = mainViewModel.isSuperAdmin()
+    val isDesigner = mainViewModel.isDesigner()
     val isStaff = mainViewModel.isEffectiveStaff()
 
     val orderViewModel = remember {
@@ -95,8 +100,29 @@ fun AppNavigation(
     }
 
     // Default screen based on role
-    var currentScreen by remember(isStaff) {
+    var currentScreen by remember(isStaff, isSuperAdmin) {
         mutableStateOf(if (isStaff) Screen.DESIGNER_HUB else Screen.HOME)
+    }
+
+    // Navigation Guard (Requirement 4):
+    // Users with CLIENT role can only view client services and orders.
+    // Designer/Admin screens are locked strictly for verified designers & admin.
+    LaunchedEffect(isStaff, isSuperAdmin, currentScreen) {
+        if (!isStaff) {
+            val forbiddenForClient = setOf(
+                Screen.DESIGNER_HUB,
+                Screen.ADMIN_DASHBOARD,
+                Screen.CALCULATOR,
+                Screen.MATERIALS,
+                Screen.PARTNERS
+            )
+            if (currentScreen in forbiddenForClient) {
+                currentScreen = Screen.HOME
+            }
+        } else if (!isSuperAdmin && currentScreen == Screen.ADMIN_DASHBOARD) {
+            // Only Super Admin can access the Admin Dashboard
+            currentScreen = Screen.DESIGNER_HUB
+        }
     }
 
     // Start observing orders when user is signed in
@@ -112,6 +138,7 @@ fun AppNavigation(
         currentScreen = if (isStaff) Screen.DESIGNER_HUB else Screen.HOME
     }
 
+    // Navigation items tailored strictly by role
     val clientNavItems = listOf(
         NavItem(Screen.HOME, "الرئيسية", Icons.Default.Home),
         NavItem(Screen.NEW_ORDER, "طلب جديد", Icons.Default.AddCircle),
@@ -128,7 +155,19 @@ fun AppNavigation(
         NavItem(Screen.SETTINGS, "الإعدادات", Icons.Default.Settings)
     )
 
-    val currentNavItems = if (isStaff) designerNavItems else clientNavItems
+    val adminNavItems = listOf(
+        NavItem(Screen.DESIGNER_HUB, "الطلبات", Icons.Default.Dashboard),
+        NavItem(Screen.ADMIN_DASHBOARD, "الإدارة", Icons.Default.AdminPanelSettings),
+        NavItem(Screen.CALCULATOR, "الحاسبة", Icons.Default.Calculate),
+        NavItem(Screen.MATERIALS, "الخامات", Icons.Default.Inventory2),
+        NavItem(Screen.SETTINGS, "الإعدادات", Icons.Default.Settings)
+    )
+
+    val currentNavItems = when {
+        !isStaff -> clientNavItems
+        isSuperAdmin -> adminNavItems
+        else -> designerNavItems
+    }
 
     Scaffold(
         bottomBar = {
@@ -168,7 +207,7 @@ fun AppNavigation(
             }
         },
         floatingActionButton = {
-            // Persistent Floating Action Button allowing instant return to Designer Hub when previewing as client
+            // Floating Action Button allowing return to Designer Hub when previewing as client
             AnimatedVisibility(visible = isPreviewingAsClient) {
                 ExtendedFloatingActionButton(
                     onClick = {
@@ -194,7 +233,9 @@ fun AppNavigation(
                 Screen.HOME -> ClientHomeScreen(
                     mainViewModel = mainViewModel,
                     onNavigateToNewOrder = { currentScreen = Screen.NEW_ORDER },
-                    onNavigateToCalculator = { currentScreen = Screen.CALCULATOR },
+                    onNavigateToCalculator = {
+                        if (isStaff) currentScreen = Screen.CALCULATOR
+                    },
                     onNavigateToNotifications = { currentScreen = Screen.NOTIFICATIONS },
                     onNavigateToComplaints = { currentScreen = Screen.COMPLAINTS }
                 )
@@ -218,7 +259,11 @@ fun AppNavigation(
                     orderViewModel = orderViewModel,
                     onNavigateToCalculator = { currentScreen = Screen.CALCULATOR },
                     onNavigateToMaterials = { currentScreen = Screen.MATERIALS },
-                    onNavigateToPartners = { currentScreen = Screen.PARTNERS }
+                    onNavigateToPartners = { currentScreen = Screen.PARTNERS },
+                    onNavigateToAdminDashboard = { currentScreen = Screen.ADMIN_DASHBOARD }
+                )
+                Screen.ADMIN_DASHBOARD -> AdminDashboardScreen(
+                    mainViewModel = mainViewModel
                 )
                 Screen.CALCULATOR -> SignageCalculatorScreen(
                     calculatorViewModel = calculatorViewModel

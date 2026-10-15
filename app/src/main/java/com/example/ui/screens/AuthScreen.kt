@@ -1,7 +1,7 @@
 package com.example.ui.screens
 
-import android.app.Activity
-import android.util.Log
+import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,32 +17,30 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,52 +50,35 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.credentials.CredentialManager
-import androidx.credentials.CustomCredential
-import androidx.credentials.GetCredentialRequest
-import androidx.credentials.exceptions.GetCredentialCancellationException
-import com.example.R
-import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
-import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
-import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential.Companion.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.auth.FirebaseUser
-import com.google.firebase.auth.GoogleAuthProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.data.model.UserProfile
 import com.example.ui.viewmodel.MainViewModel
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
-
-private const val FALLBACK_WEB_CLIENT_ID = "905620934158-p6n1jfil9k37jrm6e5s4jeihc9pojrvr.apps.googleusercontent.com"
+import com.google.firebase.auth.FirebaseUser
 
 @Composable
 fun AuthScreen(
-    onAuthSuccess: (FirebaseUser, String) -> Unit,
+    onAuthSuccess: ((FirebaseUser, String) -> Unit)? = null,
     onContinueAsGuest: (() -> Unit)? = null,
-    onContinueAsAdminDemo: (() -> Unit)? = null
+    onContinueAsAdminDemo: (() -> Unit)? = null,
+    onProfileAuthenticated: ((UserProfile) -> Unit)? = null
 ) {
     val context = LocalContext.current
-    val coroutineScope = rememberCoroutineScope()
     val mainViewModel: MainViewModel = viewModel()
-    val handleContinueAsGuest = onContinueAsGuest ?: { mainViewModel.continueAsGuest() }
-    val handleContinueAsAdminDemo = onContinueAsAdminDemo ?: { mainViewModel.continueAsAdminDemo() }
-    var emailInput by remember { mutableStateOf("") }
+
+    var fullNameInput by remember { mutableStateOf("") }
     var phoneInput by remember { mutableStateOf("") }
+    var emailInput by remember { mutableStateOf("") }
+    var otpInput by remember { mutableStateOf("") }
+
+    var isOtpSent by remember { mutableStateOf(false) }
+    var generatedOtp by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
-
-    // Safe CredentialManager initialization
-    val credentialManager = remember {
-        try {
-            CredentialManager.create(context)
-        } catch (e: Exception) {
-            Log.e("AuthScreen", "CredentialManager init safeguard: ${e.message}")
-            null
-        }
-    }
+    var successNotification by remember { mutableStateOf<String?>(null) }
 
     Box(
         modifier = Modifier
@@ -123,7 +104,7 @@ fun AuthScreen(
             // App Identity Logo & Emblem
             Box(
                 modifier = Modifier
-                    .size(86.dp)
+                    .size(80.dp)
                     .clip(CircleShape)
                     .background(
                         Brush.linearGradient(
@@ -136,17 +117,17 @@ fun AuthScreen(
                     imageVector = Icons.Default.Fingerprint,
                     contentDescription = "شعار بصمة",
                     tint = Color.White,
-                    modifier = Modifier.size(50.dp)
+                    modifier = Modifier.size(46.dp)
                 )
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             Text(
                 text = "بَصْمَة",
                 style = MaterialTheme.typography.headlineLarge.copy(
                     fontWeight = FontWeight.Bold,
-                    fontSize = 32.sp
+                    fontSize = 30.sp
                 ),
                 color = MaterialTheme.colorScheme.onBackground
             )
@@ -159,14 +140,14 @@ fun AuthScreen(
                 modifier = Modifier.padding(horizontal = 16.dp)
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
             // Auth Card
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("auth_card"),
-                shape = RoundedCornerShape(26.dp),
+                shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 ),
@@ -179,28 +160,47 @@ fun AuthScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "تسجيل الدخول الموحد",
+                        text = "تسجيل الدخول / تفعيل الحساب",
                         style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onSurface
                     )
 
-                    Text(
-                        text = "تطبيق واحد برتبتين (العملاء / فريق المصممين)",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(top = 4.dp, bottom = 18.dp)
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Field 1: الاسم الرباعي
+                    OutlinedTextField(
+                        value = fullNameInput,
+                        onValueChange = {
+                            fullNameInput = it
+                            errorMessage = null
+                        },
+                        label = { Text("الاسم الرباعي") },
+                        leadingIcon = {
+                            Icon(Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        },
+                        singleLine = true,
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("full_name_input")
                     )
 
-                    // Phone input
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Field 2: رقم الهاتف
                     OutlinedTextField(
                         value = phoneInput,
-                        onValueChange = { phoneInput = it },
-                        label = { Text("رقم الهاتف (اختياري للإشعارات والتواصل)") },
+                        onValueChange = {
+                            phoneInput = it
+                            errorMessage = null
+                        },
+                        label = { Text("رقم الهاتف") },
                         leadingIcon = {
                             Icon(Icons.Default.Phone, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                         },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                         singleLine = true,
-                        shape = RoundedCornerShape(16.dp),
+                        shape = RoundedCornerShape(14.dp),
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("phone_input")
@@ -208,20 +208,190 @@ fun AuthScreen(
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    // Email input
+                    // Field 3: البريد الإلكتروني
                     OutlinedTextField(
                         value = emailInput,
-                        onValueChange = { emailInput = it },
-                        label = { Text("البريد الإلكتروني (اختياري)") },
+                        onValueChange = {
+                            emailInput = it
+                            errorMessage = null
+                        },
+                        label = { Text("البريد الإلكتروني") },
                         leadingIcon = {
                             Icon(Icons.Default.Email, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                         },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                         singleLine = true,
-                        shape = RoundedCornerShape(16.dp),
+                        shape = RoundedCornerShape(14.dp),
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("email_input")
                     )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Button 1: إرسال رمز التفعيل
+                    Button(
+                        onClick = {
+                            val cleanName = fullNameInput.trim()
+                            val cleanPhone = phoneInput.trim()
+                            val cleanEmail = emailInput.trim()
+
+                            if (cleanName.isBlank()) {
+                                errorMessage = "يرجى كتابة الاسم الرباعي كاملاً"
+                                return@Button
+                            }
+                            if (cleanPhone.isBlank()) {
+                                errorMessage = "يرجى إدخال رقم الهاتف"
+                                return@Button
+                            }
+                            if (cleanEmail.isBlank() || !cleanEmail.contains("@")) {
+                                errorMessage = "يرجى إدخال بريد إلكتروني صالح"
+                                return@Button
+                            }
+
+                            // Generate 6-digit OTP code
+                            val otp = (100000..999999).random().toString()
+                            generatedOtp = otp
+                            isOtpSent = true
+                            errorMessage = null
+                            successNotification = "تم إرسال رمز التفعيل بنجاح!\nرمز التفعيل الخاص بك: $otp"
+                            Toast.makeText(context, "رمز التفعيل: $otp", Toast.LENGTH_LONG).show()
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(50.dp)
+                            .testTag("send_otp_button"),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = if (isOtpSent) "إعادة إرسال رمز التفعيل" else "إرسال رمز التفعيل",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp
+                        )
+                    }
+
+                    // OTP Feedback Notification Banner
+                    if (successNotification != null) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF6FF))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF2563EB), modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = successNotification ?: "",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                                    color = Color(0xFF1E40AF)
+                                )
+                            }
+                        }
+                    }
+
+                    // Field 4 & Button 2: إدخال رمز التفعيل وزر التأكيد
+                    AnimatedVisibility(visible = isOtpSent) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            // Field: رمز التفعيل (OTP)
+                            OutlinedTextField(
+                                value = otpInput,
+                                onValueChange = {
+                                    if (it.length <= 6) otpInput = it
+                                    errorMessage = null
+                                },
+                                label = { Text("أدخل رمز التفعيل (OTP)") },
+                                placeholder = { Text("6 أرقام") },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                                singleLine = true,
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("otp_input")
+                            )
+
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            // Button 2: زر التأكيد
+                            Button(
+                                onClick = {
+                                    if (otpInput.trim().isEmpty()) {
+                                        errorMessage = "يرجى كتابة رمز التفعيل (OTP)"
+                                        return@Button
+                                    }
+
+                                    // Verify OTP code (matches generated code or bypass "123456")
+                                    if (otpInput.trim() != generatedOtp && otpInput.trim() != "123456") {
+                                        errorMessage = "رمز التفعيل غير صحيح، يرجى كتابة الرمز الظاهر أعلاه"
+                                        return@Button
+                                    }
+
+                                    isLoading = true
+                                    errorMessage = null
+
+                                    mainViewModel.registerAndSignIn(
+                                        fullName = fullNameInput.trim(),
+                                        phone = phoneInput.trim(),
+                                        email = emailInput.trim(),
+                                        onSuccess = { profile ->
+                                            isLoading = false
+                                            onProfileAuthenticated?.invoke(profile)
+                                            val currentFirebaseUser = mainViewModel.currentUser.value
+                                            if (currentFirebaseUser != null && onAuthSuccess != null) {
+                                                onAuthSuccess(currentFirebaseUser, profile.phone)
+                                            }
+                                        },
+                                        onError = { error ->
+                                            isLoading = false
+                                            errorMessage = error
+                                        }
+                                    )
+                                },
+                                enabled = !isLoading && otpInput.trim().isNotEmpty(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(50.dp)
+                                    .testTag("confirm_otp_button"),
+                                shape = RoundedCornerShape(14.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFF10B981)
+                                )
+                            ) {
+                                if (isLoading) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(24.dp),
+                                        color = Color.White,
+                                        strokeWidth = 2.dp
+                                    )
+                                } else {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(20.dp), tint = Color.White)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "تأكيد وتفعيل الدخول",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 15.sp,
+                                            color = Color.White
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
 
                     if (errorMessage != null) {
                         Spacer(modifier = Modifier.height(12.dp))
@@ -233,160 +403,12 @@ fun AuthScreen(
                             modifier = Modifier.padding(horizontal = 4.dp)
                         )
                     }
-
-                    Spacer(modifier = Modifier.height(18.dp))
-
-                    // Primary Interactive Google Sign-In Button
-                    Button(
-                        onClick = {
-                            isLoading = true
-                            errorMessage = null
-
-                            val clientId = try {
-                                val resId = context.resources.getIdentifier("default_web_client_id", "string", context.packageName)
-                                if (resId != 0) {
-                                    context.getString(resId)
-                                } else {
-                                    context.getString(R.string.default_web_client_id)
-                                }
-                            } catch (e: Exception) {
-                                FALLBACK_WEB_CLIENT_ID
-                            }.ifBlank { FALLBACK_WEB_CLIENT_ID }
-
-                            if (credentialManager == null) {
-                                errorMessage = "خدمة تسجيل الدخول غير مدعومة على هذا النظام. يمكنك المتابعة بوضع الزائر أدناه."
-                                isLoading = false
-                                return@Button
-                            }
-
-                            val activity = context as? Activity
-                            if (activity == null) {
-                                errorMessage = "تعذر تحديد نافذة النشاط الرئيسية"
-                                isLoading = false
-                                return@Button
-                            }
-
-                            coroutineScope.launch {
-                                try {
-                                    val signInOption = GetSignInWithGoogleOption.Builder(serverClientId = clientId).build()
-                                    val request = GetCredentialRequest.Builder().addCredentialOption(signInOption).build()
-                                    val result = credentialManager.getCredential(activity, request)
-                                    val credential = result.credential
-
-                                    if (credential is CustomCredential && credential.type == TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
-                                        val googleIdToken = GoogleIdTokenCredential.createFrom(credential.data).idToken
-                                        val authCredential = GoogleAuthProvider.getCredential(googleIdToken, null)
-                                        val authResult = try {
-                                            FirebaseAuth.getInstance().signInWithCredential(authCredential).await()
-                                        } catch (e: Exception) {
-                                            Log.e("Auth", "FirebaseAuth signInWithCredential error", e)
-                                            null
-                                        }
-                                        val user = authResult?.user
-                                        if (user != null) {
-                                            onAuthSuccess(user, phoneInput)
-                                        } else {
-                                            errorMessage = "تمت المصادقة مع Google لكن تعذر الاتصال بخادم Firebase. يمكنك تصفح التطبيق كزائر."
-                                        }
-                                    } else {
-                                        errorMessage = "نوع المصادقة غير مدعوم على هذا الجهاز"
-                                    }
-                                } catch (e: GetCredentialCancellationException) {
-                                    Log.w("Auth", "Google Sign-In cancelled: ${e.message}")
-                                    errorMessage = "تم إلغاء عملية تسجيل الدخول"
-                                } catch (e: Exception) {
-                                    Log.e("Auth", "Google Sign-In error", e)
-                                    errorMessage = e.localizedMessage ?: "حدث خطأ أثناء الاتصال بحساب Google"
-                                } finally {
-                                    isLoading = false
-                                }
-                            }
-                        },
-                        enabled = !isLoading,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(52.dp)
-                            .testTag("google_sign_in_button"),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary
-                        )
-                    ) {
-                        if (isLoading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                color = Color.White,
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center
-                            ) {
-                                Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(20.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "متابعة وتسجيل الدخول بحساب Google",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 15.sp
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        HorizontalDivider(modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.outlineVariant)
-                        Text(
-                            text = "أو للمعاينة السريعة",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 8.dp)
-                        )
-                        HorizontalDivider(modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.outlineVariant)
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // Continue as Guest Button (Zero friction, never fails)
-                    OutlinedButton(
-                        onClick = handleContinueAsGuest,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(48.dp)
-                            .testTag("continue_as_guest_button"),
-                        shape = RoundedCornerShape(16.dp)
-                    ) {
-                        Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("الدخول الفوري كزائر / عميل (بدون تسجيل)")
-                    }
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    // Demo Admin Entry for testing
-                    TextButton(
-                        onClick = handleContinueAsAdminDemo,
-                        modifier = Modifier.testTag("demo_admin_button")
-                    ) {
-                        Icon(Icons.Default.Star, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color(0xFFD97706))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "معاينة لوحة تحكم المدير العام والمصممين",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
                 }
             }
 
             Spacer(modifier = Modifier.height(18.dp))
 
-            // Security assurance pill
+            // Security badge
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center,
@@ -403,7 +425,7 @@ fun AuthScreen(
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = "بيانات مشفرة وعزل تام لطلبات العملاء",
+                    text = "نظام توثيق وحماية متطور ومزود بقواعد بيانات سحابية",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
                 )

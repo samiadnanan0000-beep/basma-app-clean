@@ -83,7 +83,8 @@ fun DesignerHubScreen(
     orderViewModel: OrderViewModel,
     onNavigateToCalculator: () -> Unit,
     onNavigateToMaterials: () -> Unit,
-    onNavigateToPartners: () -> Unit
+    onNavigateToPartners: () -> Unit,
+    onNavigateToAdminDashboard: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -425,7 +426,13 @@ fun DesignerHubScreen(
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { showTeamDialog = true },
+                        .clickable {
+                            if (onNavigateToAdminDashboard != null) {
+                                onNavigateToAdminDashboard()
+                            } else {
+                                showTeamDialog = true
+                            }
+                        },
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF6FF))
                 ) {
