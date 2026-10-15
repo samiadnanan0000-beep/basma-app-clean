@@ -15,6 +15,13 @@ data class UserProfile(
     @ServerTimestamp val createdAt: Timestamp? = null
 )
 
+object PaymentStatus {
+    const val WAITING_FOR_ADVANCE = "WAITING_FOR_ADVANCE"
+    const val UNDER_REVIEW = "UNDER_REVIEW"
+    const val APPROVED = "APPROVED"
+    const val REJECTED = "REJECTED"
+}
+
 @IgnoreExtraProperties
 data class OrderItem(
     @DocumentId val id: String = "",
@@ -33,6 +40,14 @@ data class OrderItem(
     val sitePhotoUrl: String = "",
     val status: String = "pending", // "pending", "quoted", "in_production", "completed"
     val price: Double = 0.0,
+    val totalAmount: Double = 0.0,
+    val advanceAmount: Double = 0.0,
+    val remainingAmount: Double = 0.0,
+    val paymentMethod: String = "", // "جيب", "جوالي", "ون كاش"
+    val receiptImageUrl: String? = null,
+    val paymentStatus: String = PaymentStatus.WAITING_FOR_ADVANCE,
+    val isApprovedByDesignerOrAdmin: Boolean = false,
+    val paymentRejectionReason: String = "",
     val currency: String = "YER",
     val turnaroundTime: String = "",
     val proofUrl: String = "",
@@ -40,7 +55,16 @@ data class OrderItem(
     val rejectionReason: String = "",
     @ServerTimestamp val createdAt: Timestamp? = null,
     @ServerTimestamp val updatedAt: Timestamp? = null
-)
+) {
+    val effectiveTotal: Double
+        get() = if (totalAmount > 0.0) totalAmount else price
+
+    val calculatedAdvance: Double
+        get() = if (advanceAmount > 0.0) advanceAmount else (effectiveTotal * 0.70)
+
+    val calculatedRemaining: Double
+        get() = if (remainingAmount > 0.0) remainingAmount else (effectiveTotal * 0.30)
+}
 
 @IgnoreExtraProperties
 data class MaterialItem(
@@ -48,6 +72,7 @@ data class MaterialItem(
     val name: String = "",
     val unitType: String = "متر مربع", // "متر مربع", "لوح", "قطعة", "متر طولي"
     val pricePerUnit: Double = 0.0,
+    val quantity: Double = 1.0,
     val currency: String = "YER",
     val inStock: Boolean = true,
     @ServerTimestamp val updatedAt: Timestamp? = null

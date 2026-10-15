@@ -51,6 +51,7 @@ import com.example.ui.screens.NewOrderScreen
 import com.example.ui.screens.NotificationsCenterScreen
 import com.example.ui.screens.OrderTrackingScreen
 import com.example.ui.screens.PartnerLedgerScreen
+import com.example.ui.screens.PortfolioScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.SignageCalculatorScreen
 import com.example.ui.viewmodel.MainViewModel
@@ -68,6 +69,7 @@ enum class Screen {
     CALCULATOR,
     MATERIALS,
     PARTNERS,
+    PORTFOLIO,
     SETTINGS
 }
 
@@ -234,7 +236,8 @@ fun AppNavigation(
                     mainViewModel = mainViewModel,
                     onNavigateToNewOrder = { currentScreen = Screen.NEW_ORDER },
                     onNavigateToNotifications = { currentScreen = Screen.NOTIFICATIONS },
-                    onNavigateToComplaints = { currentScreen = Screen.COMPLAINTS }
+                    onNavigateToComplaints = { currentScreen = Screen.COMPLAINTS },
+                    onNavigateToPortfolio = { currentScreen = Screen.PORTFOLIO }
                 )
                 Screen.NEW_ORDER -> NewOrderScreen(
                     mainViewModel = mainViewModel,
@@ -257,7 +260,8 @@ fun AppNavigation(
                     onNavigateToCalculator = { currentScreen = Screen.CALCULATOR },
                     onNavigateToMaterials = { currentScreen = Screen.MATERIALS },
                     onNavigateToPartners = { currentScreen = Screen.PARTNERS },
-                    onNavigateToAdminDashboard = { currentScreen = Screen.ADMIN_DASHBOARD }
+                    onNavigateToAdminDashboard = { currentScreen = Screen.ADMIN_DASHBOARD },
+                    onNavigateToPortfolio = { currentScreen = Screen.PORTFOLIO }
                 )
                 Screen.ADMIN_DASHBOARD -> AdminDashboardScreen(
                     mainViewModel = mainViewModel
@@ -270,6 +274,9 @@ fun AppNavigation(
                 )
                 Screen.PARTNERS -> PartnerLedgerScreen(
                     partnerRepository = mainViewModel.partnerRepository
+                )
+                Screen.PORTFOLIO -> PortfolioScreen(
+                    mainViewModel = mainViewModel
                 )
                 Screen.SETTINGS -> SettingsScreen(
                     mainViewModel = mainViewModel,

@@ -72,6 +72,11 @@ fun BiometricLockOverlay(
         }
     }
 
+    // Automatically trigger BiometricPrompt on open
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        triggerBiometrics()
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()

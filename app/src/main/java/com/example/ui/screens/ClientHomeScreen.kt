@@ -46,6 +46,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -71,7 +72,8 @@ fun ClientHomeScreen(
     onNavigateToNewOrder: () -> Unit,
     onNavigateToCalculator: (() -> Unit)? = null,
     onNavigateToNotifications: () -> Unit,
-    onNavigateToComplaints: () -> Unit
+    onNavigateToComplaints: () -> Unit,
+    onNavigateToPortfolio: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val offers by mainViewModel.offerRepository.observeOffers().collectAsState(initial = emptyList())
@@ -362,6 +364,17 @@ fun ClientHomeScreen(
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onBackground
                     )
+                    TextButton(
+                        onClick = { onNavigateToPortfolio?.invoke() ?: onNavigateToNewOrder() },
+                        modifier = Modifier.testTag("view_all_portfolio_button")
+                    ) {
+                        Text(
+                            text = "عرض المعرض بالكامل ❯",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
 
                 val portfolioItems = listOf(
@@ -381,7 +394,7 @@ fun ClientHomeScreen(
                                 Card(
                                     modifier = Modifier
                                         .weight(1f)
-                                        .clickable { onNavigateToNewOrder() },
+                                        .clickable { onNavigateToPortfolio?.invoke() ?: onNavigateToNewOrder() },
                                     shape = RoundedCornerShape(18.dp),
                                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)

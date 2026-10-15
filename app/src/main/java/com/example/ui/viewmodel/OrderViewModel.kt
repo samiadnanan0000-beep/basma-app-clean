@@ -113,4 +113,41 @@ class OrderViewModel(
             orderRepository.clientRejectProof(order.id, reason)
         }
     }
+
+    fun submitAdvancePayment(
+        order: OrderItem,
+        paymentMethod: String,
+        receiptImageUrl: String,
+        onSuccess: () -> Unit
+    ) {
+        viewModelScope.launch {
+            val total = order.effectiveTotal
+            val advance = order.calculatedAdvance
+            val remaining = order.calculatedRemaining
+            orderRepository.submitAdvancePayment(
+                orderId = order.id,
+                clientId = order.clientId,
+                totalAmount = total,
+                advanceAmount = advance,
+                remainingAmount = remaining,
+                paymentMethod = paymentMethod,
+                receiptImageUrl = receiptImageUrl
+            )
+            onSuccess()
+        }
+    }
+
+    fun approveAdvancePayment(order: OrderItem, onSuccess: () -> Unit = {}) {
+        viewModelScope.launch {
+            orderRepository.approveAdvancePayment(order.id, order.clientId)
+            onSuccess()
+        }
+    }
+
+    fun rejectAdvancePayment(order: OrderItem, reason: String, onSuccess: () -> Unit = {}) {
+        viewModelScope.launch {
+            orderRepository.rejectAdvancePayment(order.id, order.clientId, reason)
+            onSuccess()
+        }
+    }
 }

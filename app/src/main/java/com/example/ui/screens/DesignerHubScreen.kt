@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Check
@@ -84,7 +85,8 @@ fun DesignerHubScreen(
     onNavigateToCalculator: () -> Unit,
     onNavigateToMaterials: () -> Unit,
     onNavigateToPartners: () -> Unit,
-    onNavigateToAdminDashboard: (() -> Unit)? = null
+    onNavigateToAdminDashboard: (() -> Unit)? = null,
+    onNavigateToPortfolio: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -416,6 +418,35 @@ fun DesignerHubScreen(
                         Spacer(modifier = Modifier.height(4.dp))
                         Text("إذاعة تنبيه", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
+                }
+            }
+        }
+
+        // Portfolio Management Banner for Designers and Admin
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onNavigateToPortfolio?.invoke() },
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Collections, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text("نماذج من أعمالنا (المعرض العام) 🎨", fontWeight = FontWeight.Bold)
+                            Text("إضافة وحذف وتحديث صور وأعمال الاستوديو المعروضة للعملاء", fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
+                        }
+                    }
+                    Text("إدارة ❯", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 }
             }
         }

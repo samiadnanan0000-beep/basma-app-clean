@@ -34,6 +34,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val complaintRepository = ComplaintRepository(application, notificationRepository)
     val offerRepository = OfferRepository(application)
     val partnerRepository = PartnerRepository(application)
+    val portfolioRepository = com.example.data.repository.PortfolioRepository(application)
 
     private val auth: FirebaseAuth? = userRepository.auth
 
@@ -76,6 +77,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 materialRepository.seedInitialMaterialsIfEmpty()
                 offerRepository.seedInitialOffersIfEmpty()
                 partnerRepository.seedInitialPartnersIfEmpty()
+                portfolioRepository.seedInitialPortfolioIfEmpty()
             } catch (e: Exception) {
                 // Ignore background seeder network errors
             }
@@ -122,6 +124,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     /**
      * Registers a new account with email, phone, name, and chosen password.
+     * Uses official Firebase Auth createUserWithEmailAndPassword + sendEmailVerification.
      */
     fun registerWithEmail(
         fullName: String,
@@ -136,7 +139,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val profile = userRepository.registerWithEmailAndPassword(fullName, phone, email, password)
                 _userProfile.value = profile
-                _isGuestMode.value = true
+                _currentUser.value = auth?.currentUser
+                _isGuestMode.value = false
 
                 // Save email and account presence locally
                 biometricLockManager.setAccountSaved(email)
@@ -163,13 +167,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 onSuccess(profile)
             } catch (e: Exception) {
                 Log.e("MainViewModel", "registerWithEmail error: ${e.message}", e)
-                onError(e.localizedMessage ?: "حدث خطأ أثناء إنشاء الحساب وتفعيله")
+                val errorMsg = when {
+                    e is com.google.firebase.auth.FirebaseAuthUserCollisionException ->
+                        "هذا البريد الإلكتروني مسجل مسبقاً، يرجى تسجيل الدخول"
+                    e is com.google.firebase.auth.FirebaseAuthWeakPasswordException ->
+                        "كلمة المرور ضعيفة جداً، يرجى اختيار كلمة مرور من 6 أحرف أو أرقام على الأقل"
+                    e is com.google.firebase.FirebaseNetworkException ->
+                        "تعذر الاتصال بالشبكة، يرجى التحقق من اتصالك بالإنترنت"
+                    e.message?.contains("network", ignoreCase = true) == true ->
+                        "تعذر الاتصال بالشبكة، يرجى التحقق من اتصالك بالإنترنت"
+                    else -> e.localizedMessage ?: "حدث خطأ أثناء إنشاء الحساب"
+                }
+                onError(errorMsg)
             }
         }
     }
 
     /**
-     * Standard subsequent sign-in with email and password.
+     * Strict Login Verification:
+     * Disallows mock bypass; strictly enforces auth.signInWithEmailAndPassword.
      */
     fun signInWithEmailAndPassword(
         email: String,
@@ -181,7 +197,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val profile = userRepository.signInWithEmailAndPassword(email, password)
                 _userProfile.value = profile
-                _isGuestMode.value = true
+                _currentUser.value = auth?.currentUser
+                _isGuestMode.value = false
 
                 // Save email locally
                 biometricLockManager.setAccountSaved(email)
@@ -205,7 +222,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 onSuccess(profile)
             } catch (e: Exception) {
                 Log.e("MainViewModel", "signInWithEmailAndPassword error: ${e.message}", e)
-                onError(e.localizedMessage ?: "البريد الإلكتروني أو كلمة المرور غير صحيحة")
+                val errorMsg = when {
+                    e is com.google.firebase.auth.FirebaseAuthInvalidUserException ->
+                        "هذا الحساب غير مسجل، يرجى إنشاء حساب جديد"
+                    e is com.google.firebase.auth.FirebaseAuthInvalidCredentialsException ->
+                        "كلمة المرور غير صحيحة"
+                    e is com.google.firebase.FirebaseNetworkException ->
+                        "تعذر الاتصال بالشبكة، يرجى التحقق من اتصالك بالإنترنت"
+                    e.message?.contains("no user record", ignoreCase = true) == true ->
+                        "هذا الحساب غير مسجل، يرجى إنشاء حساب جديد"
+                    e.message?.contains("password is invalid", ignoreCase = true) == true ||
+                    e.message?.contains("credential is malformed", ignoreCase = true) == true ->
+                        "كلمة المرور غير صحيحة"
+                    e.message?.contains("network", ignoreCase = true) == true ->
+                        "تعذر الاتصال بالشبكة، يرجى التحقق من اتصالك بالإنترنت"
+                    else -> e.localizedMessage ?: "البريد الإلكتروني أو كلمة المرور غير صحيحة"
+                }
+                onError(errorMsg)
             }
         }
     }
@@ -227,7 +260,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     onError("تعذر إرسال رابط الاستعادة إلى هذا البريد، يرجى التأكد من صحته")
                 }
             } catch (e: Exception) {
-                onError(e.localizedMessage ?: "حدث خطأ أثناء إرسال رسالة الاستعادة")
+                val errorMsg = when {
+                    e is com.google.firebase.auth.FirebaseAuthInvalidUserException ->
+                        "هذا الحساب غير مسجل، يرجى إنشاء حساب جديد"
+                    e is com.google.firebase.FirebaseNetworkException ->
+                        "تعذر الاتصال بالشبكة، يرجى التحقق من اتصالك بالإنترنت"
+                    e.message?.contains("network", ignoreCase = true) == true ->
+                        "تعذر الاتصال بالشبكة، يرجى التحقق من اتصالك بالإنترنت"
+                    else -> e.localizedMessage ?: "حدث خطأ أثناء إرسال رسالة الاستعادة"
+                }
+                onError(errorMsg)
             }
         }
     }

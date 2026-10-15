@@ -15,6 +15,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.fragment.app.FragmentActivity
@@ -81,8 +82,7 @@ class MainActivity : FragmentActivity() {
         }
 
         setContent {
-            val systemDark = isSystemInDarkTheme()
-            var isDarkTheme by remember { mutableStateOf(systemDark) }
+            var isDarkTheme by rememberSaveable { mutableStateOf(false) }
             var currentCrashLog by remember { mutableStateOf(startupCrash) }
 
             BasmaTheme(darkTheme = isDarkTheme) {

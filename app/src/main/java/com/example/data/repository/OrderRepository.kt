@@ -93,9 +93,16 @@ class OrderRepository(
     ) {
         if (orderId.isBlank()) return
         try {
+            val total = price
+            val advance = total * 0.70
+            val remaining = total * 0.30
             val updates = mutableMapOf<String, Any>(
                 "status" to "quoted",
                 "price" to price,
+                "totalAmount" to total,
+                "advanceAmount" to advance,
+                "remainingAmount" to remaining,
+                "paymentStatus" to com.example.data.model.PaymentStatus.WAITING_FOR_ADVANCE,
                 "currency" to currency,
                 "turnaroundTime" to turnaroundTime,
                 "updatedAt" to FieldValue.serverTimestamp()
@@ -108,7 +115,87 @@ class OrderRepository(
             // Notify client directly
             notificationRepository.sendNotification(
                 title = "تم تسعير طلبك بنجاح 💰",
-                message = "السعر: $price $currency - موعد التسليم: $turnaroundTime. يرجى مراجعة تفاصيل الطلب واعتماد البروفة.",
+                message = "السعر الإجمالي: $price $currency (الدفعة المقدمة 70%: ${advance.toInt()} $currency) - موعد التسليم: $turnaroundTime. يرجى سداد الدفعة لبدء العمل.",
+                type = "order",
+                targetId = clientId,
+                relatedId = orderId
+            )
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.UPDATE, "orders/$orderId")
+        }
+    }
+
+    suspend fun submitAdvancePayment(
+        orderId: String,
+        clientId: String,
+        totalAmount: Double,
+        advanceAmount: Double,
+        remainingAmount: Double,
+        paymentMethod: String,
+        receiptImageUrl: String
+    ) {
+        if (orderId.isBlank()) return
+        try {
+            val updates = mapOf(
+                "totalAmount" to totalAmount,
+                "advanceAmount" to advanceAmount,
+                "remainingAmount" to remainingAmount,
+                "paymentMethod" to paymentMethod,
+                "receiptImageUrl" to receiptImageUrl,
+                "paymentStatus" to com.example.data.model.PaymentStatus.UNDER_REVIEW,
+                "paymentRejectionReason" to "",
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+            ordersRef.document(orderId).update(updates).await()
+
+            notificationRepository.sendNotification(
+                title = "إشعار سداد دفعة مقدمة (70%) 💳",
+                message = "قام العميل بسداد دفعة ${advanceAmount.toInt()} ر.ي عبر ($paymentMethod) للطلب #${orderId.take(6)}، بانتظار المراجعة والتأكيد.",
+                type = "order",
+                targetId = "all",
+                relatedId = orderId
+            )
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.UPDATE, "orders/$orderId")
+        }
+    }
+
+    suspend fun approveAdvancePayment(orderId: String, clientId: String) {
+        if (orderId.isBlank()) return
+        try {
+            val updates = mapOf(
+                "paymentStatus" to com.example.data.model.PaymentStatus.APPROVED,
+                "isApprovedByDesignerOrAdmin" to true,
+                "status" to "in_production",
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+            ordersRef.document(orderId).update(updates).await()
+
+            notificationRepository.sendNotification(
+                title = "تم تأكيد الدفعة وبدء تنفيذ طلبك! 🟢",
+                message = "تم اعتماد إشعار التحويل بنجاح، وبدأ فريق العمل الآن في تنفيذ وتجهيز طلبك.",
+                type = "order",
+                targetId = clientId,
+                relatedId = orderId
+            )
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.UPDATE, "orders/$orderId")
+        }
+    }
+
+    suspend fun rejectAdvancePayment(orderId: String, clientId: String, reason: String) {
+        if (orderId.isBlank()) return
+        try {
+            val updates = mapOf(
+                "paymentStatus" to com.example.data.model.PaymentStatus.REJECTED,
+                "paymentRejectionReason" to reason,
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+            ordersRef.document(orderId).update(updates).await()
+
+            notificationRepository.sendNotification(
+                title = "ملاحظة حول إشعار التحويل ⚠️",
+                message = "تم رفض الإشعار للسبب التالي: $reason. يرجى إعادة إرفاق صورة الإشعار الصحيحة من شاشة طلباتك.",
                 type = "order",
                 targetId = clientId,
                 relatedId = orderId
