@@ -177,12 +177,6 @@ fun BasmaAppRoot(
         AuthScreen(
             onAuthSuccess = { user, phone ->
                 mainViewModel.onUserSignedIn(user, phone)
-            },
-            onContinueAsGuest = {
-                mainViewModel.continueAsGuest()
-            },
-            onContinueAsAdminDemo = {
-                mainViewModel.continueAsAdminDemo()
             }
         )
     } else if (isAppLocked) {
