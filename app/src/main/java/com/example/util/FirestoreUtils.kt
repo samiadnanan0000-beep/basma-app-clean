@@ -15,13 +15,15 @@ fun handleFirestoreError(error: Exception, operation: OperationType, path: Strin
     Log.e("FirestoreError", "Firestore ${operation.name} failed at path '$path': ${error.message}", error)
 }
 
-fun getFirestoreInstance(context: Context): FirebaseFirestore? {
-    val app: FirebaseApp? = try {
+/**
+ * Returns a non-null FirebaseFirestore instance safely.
+ * Initializes FirebaseApp explicitly if not yet initialized in the current process.
+ */
+fun getFirestoreInstance(context: Context): FirebaseFirestore {
+    val app: FirebaseApp = try {
         if (FirebaseApp.getApps(context).isEmpty()) {
             try {
-                FirebaseApp.initializeApp(context)
-            } catch (e: Throwable) {
-                try {
+                FirebaseApp.initializeApp(context) ?: run {
                     val options = FirebaseOptions.Builder()
                         .setApplicationId("1:905620934158:android:05826bb346af1a4ede365f")
                         .setApiKey("AIzaSyCjw19CzFmqXszycXKWXBwc39-44bKwil0")
@@ -29,22 +31,35 @@ fun getFirestoreInstance(context: Context): FirebaseFirestore? {
                         .setStorageBucket("gen-lang-client-0749483247.firebasestorage.app")
                         .build()
                     FirebaseApp.initializeApp(context, options)
-                } catch (e2: Throwable) {
-                    Log.e("FirestoreUtils", "FirebaseApp initializeApp options failed: ${e2.message}")
-                    null
+                }
+            } catch (_: Throwable) {
+                val options = FirebaseOptions.Builder()
+                    .setApplicationId("1:905620934158:android:05826bb346af1a4ede365f")
+                    .setApiKey("AIzaSyCjw19CzFmqXszycXKWXBwc39-44bKwil0")
+                    .setProjectId("gen-lang-client-0749483247")
+                    .setStorageBucket("gen-lang-client-0749483247.firebasestorage.app")
+                    .build()
+                try {
+                    FirebaseApp.initializeApp(context, options)
+                } catch (_: Throwable) {
+                    FirebaseApp.getInstance()
                 }
             }
         } else {
             FirebaseApp.getInstance()
         }
-    } catch (e: Throwable) {
-        Log.e("FirestoreUtils", "FirebaseApp initialization safeguard: ${e.message}")
-        null
-    }
-
-    if (app == null) {
-        Log.w("FirestoreUtils", "FirebaseApp is not initialized; returning null safely")
-        return null
+    } catch (_: Throwable) {
+        val options = FirebaseOptions.Builder()
+            .setApplicationId("1:905620934158:android:05826bb346af1a4ede365f")
+            .setApiKey("AIzaSyCjw19CzFmqXszycXKWXBwc39-44bKwil0")
+            .setProjectId("gen-lang-client-0749483247")
+            .setStorageBucket("gen-lang-client-0749483247.firebasestorage.app")
+            .build()
+        try {
+            FirebaseApp.initializeApp(context, options)
+        } catch (_: Throwable) {
+            FirebaseApp.getInstance()
+        }
     }
 
     val databaseId = try {
@@ -54,7 +69,7 @@ fun getFirestoreInstance(context: Context): FirebaseFirestore? {
         } else {
             "ai-studio-android-cd523880-1221-4f24-9331-a62d41dced51"
         }
-    } catch (e: Throwable) {
+    } catch (_: Throwable) {
         "ai-studio-android-cd523880-1221-4f24-9331-a62d41dced51"
     }
 
@@ -62,14 +77,13 @@ fun getFirestoreInstance(context: Context): FirebaseFirestore? {
         if (databaseId.isNotBlank()) {
             try {
                 FirebaseFirestore.getInstance(app, databaseId)
-            } catch (eNamed: Throwable) {
+            } catch (_: Throwable) {
                 FirebaseFirestore.getInstance(app)
             }
         } else {
             FirebaseFirestore.getInstance(app)
         }
-    } catch (e: Throwable) {
-        Log.e("FirestoreUtils", "Firestore unavailable on this device/configuration: ${e.message}")
-        null
+    } catch (_: Throwable) {
+        FirebaseFirestore.getInstance(app)
     }
 }

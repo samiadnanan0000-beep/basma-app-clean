@@ -16,16 +16,49 @@ class OfferRepository(context: Context) {
     private val db: FirebaseFirestore = getFirestoreInstance(context)
     private val offersRef = db.collection("offers")
 
+    companion object {
+        val DEFAULT_OFFERS = listOf(
+            OfferItem(
+                id = "off1",
+                title = "باقة واجهات الكلادنج الفندقية والتجارية",
+                description = "تصميم 3D احترافي + تنفيذ كلادنج الكبوند ألماني مقاوم للحريق مع ضمان 10 سنوات",
+                imageUrl = "https://images.unsplash.com/photo-1541888946425-d0fbb186f5f7?w=800",
+                discountBadge = "خصم 20% لفترة محدودة",
+                category = "كلادنج وواجهات",
+                isActive = true
+            ),
+            OfferItem(
+                id = "off2",
+                title = "عرض الحروف البارزة 3D الإضاءة المخفية",
+                description = "اكريليك ليزر كاست نقي مع حقن ليد كوري ضد الماء وهيكل ستانلس ستيل ذهبي/فضي",
+                imageUrl = "https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=800",
+                discountBadge = "عرض حصري للمحلات",
+                category = "حروف مضيئة",
+                isActive = true
+            ),
+            OfferItem(
+                id = "off3",
+                title = "باقة الهوية البصرية والمطبوعات الورقية الكاملة",
+                description = "تصميم شعار معتمد + فولدرات + بروشورات وبطاقات أعمال فاخرة سبوت يو في",
+                imageUrl = "https://images.unsplash.com/photo-1626785774573-4b799315345d?w=800",
+                discountBadge = "الأكثر طلباً",
+                category = "هوية بصرية",
+                isActive = true
+            )
+        )
+    }
+
     fun observeOffers(): Flow<List<OfferItem>> = callbackFlow {
         val listener = offersRef.addSnapshotListener { snapshot, error ->
             if (error != null) {
                 handleFirestoreError(error, OperationType.LIST, "offers")
+                trySend(DEFAULT_OFFERS)
                 return@addSnapshotListener
             }
             val list = snapshot?.documents?.mapNotNull { doc ->
                 doc.toObject(OfferItem::class.java)?.copy(id = doc.id)
             }.orEmpty()
-            trySend(list)
+            trySend(if (list.isEmpty()) DEFAULT_OFFERS else list)
         }
         awaitClose { listener.remove() }
     }
@@ -60,33 +93,7 @@ class OfferRepository(context: Context) {
         try {
             val snapshot = offersRef.limit(1).get().await()
             if (snapshot.isEmpty) {
-                val defaults = listOf(
-                    OfferItem(
-                        title = "باقة واجهات الكلادنج الفندقية والتجارية",
-                        description = "تصميم 3D احترافي + تنفيذ كلادنج الكبوند ألماني مقاوم للحريق مع ضمان 10 سنوات",
-                        imageUrl = "https://images.unsplash.com/photo-1541888946425-d0fbb186f5f7?w=800",
-                        discountBadge = "خصم 20% لفترة محدودة",
-                        category = "كلادنج وواجهات",
-                        isActive = true
-                    ),
-                    OfferItem(
-                        title = "عرض الحروف البارزة 3D الإضاءة المخفية",
-                        description = "اكريليك ليزر كاست نقي مع حقن ليد كوري ضد الماء وهيكل ستانلس ستيل ذهبي/فضي",
-                        imageUrl = "https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=800",
-                        discountBadge = "عرض حصري للمحلات",
-                        category = "حروف مضيئة",
-                        isActive = true
-                    ),
-                    OfferItem(
-                        title = "باقة الهوية البصرية والمطبوعات الورقية الكاملة",
-                        description = "تصميم شعار معتمد + فولدرات + بروشورات وبطاقات أعمال فاخرة سبوت يو في",
-                        imageUrl = "https://images.unsplash.com/photo-1626785774573-4b799315345d?w=800",
-                        discountBadge = "الأكثر طلباً",
-                        category = "هوية بصرية",
-                        isActive = true
-                    )
-                )
-                for (item in defaults) {
+                for (item in DEFAULT_OFFERS) {
                     addOffer(item)
                 }
             }

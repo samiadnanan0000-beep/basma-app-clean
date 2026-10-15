@@ -16,16 +16,30 @@ class MaterialRepository(context: Context) {
     private val db: FirebaseFirestore = getFirestoreInstance(context)
     private val materialsRef = db.collection("materials")
 
+    companion object {
+        val DEFAULT_MATERIALS = listOf(
+            MaterialItem(id = "m1", name = "كلادنج الكبوند مقاوم للحريق 4ملم", unitType = "متر مربع", pricePerUnit = 22000.0, currency = "YER"),
+            MaterialItem(id = "m2", name = "اكريليك كاست ملون نقي 3ملم", unitType = "متر مربع", pricePerUnit = 18500.0, currency = "YER"),
+            MaterialItem(id = "m3", name = "فلكس كوري مضيء عالي الكثافة 510 جم", unitType = "متر مربع", pricePerUnit = 6500.0, currency = "YER"),
+            MaterialItem(id = "m4", name = "استكر فينيل ألماني عازل للأشعة", unitType = "متر مربع", pricePerUnit = 4800.0, currency = "YER"),
+            MaterialItem(id = "m5", name = "شاسيه حديد هيكلي تيوبات 2.5×2.5", unitType = "متر طولي", pricePerUnit = 3200.0, currency = "YER"),
+            MaterialItem(id = "m6", name = "زنكور مجلفن مقاوم للصدأ سماكة 0.8ملم", unitType = "متر مربع", pricePerUnit = 11000.0, currency = "YER"),
+            MaterialItem(id = "m7", name = "حقن ليد كوري عدسة عريضة 1.5W مقاوم للماء", unitType = "قطعة", pricePerUnit = 450.0, currency = "YER"),
+            MaterialItem(id = "m8", name = "محول طاقة ترانس معالج 12V 400W أصلي", unitType = "قطعة", pricePerUnit = 19500.0, currency = "YER")
+        )
+    }
+
     fun observeMaterials(): Flow<List<MaterialItem>> = callbackFlow {
         val listener = materialsRef.addSnapshotListener { snapshot, error ->
             if (error != null) {
                 handleFirestoreError(error, OperationType.LIST, "materials")
+                trySend(DEFAULT_MATERIALS)
                 return@addSnapshotListener
             }
             val list = snapshot?.documents?.mapNotNull { doc ->
                 doc.toObject(MaterialItem::class.java)?.copy(id = doc.id)
             }.orEmpty()
-            trySend(list)
+            trySend(if (list.isEmpty()) DEFAULT_MATERIALS else list)
         }
         awaitClose { listener.remove() }
     }
@@ -76,17 +90,7 @@ class MaterialRepository(context: Context) {
         try {
             val snapshot = materialsRef.limit(1).get().await()
             if (snapshot.isEmpty) {
-                val defaults = listOf(
-                    MaterialItem(name = "كلادنج الكبوند مقاوم للحريق 4ملم", unitType = "متر مربع", pricePerUnit = 22000.0, currency = "YER"),
-                    MaterialItem(name = "اكريليك كاست ملون نقي 3ملم", unitType = "متر مربع", pricePerUnit = 18500.0, currency = "YER"),
-                    MaterialItem(name = "فلكس كوري مضيء عالي الكثافة 510 جم", unitType = "متر مربع", pricePerUnit = 6500.0, currency = "YER"),
-                    MaterialItem(name = "استكر فينيل ألماني عازل للأشعة", unitType = "متر مربع", pricePerUnit = 4800.0, currency = "YER"),
-                    MaterialItem(name = "شاسيه حديد هيكلي تيوبات 2.5×2.5", unitType = "متر طولي", pricePerUnit = 3200.0, currency = "YER"),
-                    MaterialItem(name = "زنكور مجلفن مقاوم للصدأ سماكة 0.8ملم", unitType = "متر مربع", pricePerUnit = 11000.0, currency = "YER"),
-                    MaterialItem(name = "حقن ليد كوري عدسة عريضة 1.5W مقاوم للماء", unitType = "قطعة", pricePerUnit = 450.0, currency = "YER"),
-                    MaterialItem(name = "محول طاقة ترانس معالج 12V 400W أصلي", unitType = "قطعة", pricePerUnit = 19500.0, currency = "YER")
-                )
-                for (item in defaults) {
+                for (item in DEFAULT_MATERIALS) {
                     addMaterial(item)
                 }
             }

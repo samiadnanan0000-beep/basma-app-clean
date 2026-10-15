@@ -24,12 +24,14 @@ class UserRepository(context: Context) {
 
     suspend fun syncUserProfile(firebaseUser: FirebaseUser, phoneInput: String? = null): UserProfile {
         val uid = firebaseUser.uid
+        val email = firebaseUser.email.orEmpty()
+        val phone = phoneInput ?: firebaseUser.phoneNumber.orEmpty()
+        val isSuperAdmin = email.equals(SUPER_ADMIN_EMAIL, ignoreCase = true)
+
         val docRef = usersRef.document(uid)
+
         return try {
             val snapshot = docRef.get().await()
-            val email = firebaseUser.email.orEmpty()
-            val phone = phoneInput ?: firebaseUser.phoneNumber.orEmpty()
-            val isSuperAdmin = email.equals(SUPER_ADMIN_EMAIL, ignoreCase = true)
 
             if (snapshot.exists()) {
                 val existing = snapshot.toObject(UserProfile::class.java) ?: UserProfile(uid = uid)
@@ -62,12 +64,11 @@ class UserRepository(context: Context) {
         } catch (e: Exception) {
             handleFirestoreError(e, OperationType.READ, docRef.path)
             // Fallback object to not crash app flow
-            val isSuperAdmin = (firebaseUser.email.orEmpty()).equals(SUPER_ADMIN_EMAIL, ignoreCase = true)
             UserProfile(
                 uid = uid,
                 name = firebaseUser.displayName ?: "مستخدم بصمة",
-                email = firebaseUser.email.orEmpty(),
-                phone = phoneInput.orEmpty(),
+                email = email,
+                phone = phone,
                 role = if (isSuperAdmin) "super_admin" else "client"
             )
         }

@@ -16,16 +16,49 @@ class PartnerRepository(context: Context) {
     private val db: FirebaseFirestore = getFirestoreInstance(context)
     private val partnersRef = db.collection("partners")
 
+    companion object {
+        val DEFAULT_PARTNERS = listOf(
+            PartnerPrintShop(
+                id = "p1",
+                name = "مطبعة الصمود للطباعة الرقمية والأوفست",
+                phone = "770000001",
+                printType = "طباعة أوفست وبروشورات",
+                costTotal = 150000.0,
+                currency = "YER",
+                notes = "تسليم خلال 48 ساعة"
+            ),
+            PartnerPrintShop(
+                id = "p2",
+                name = "مركز إكستريم لحفر وتقطيع الليزر والراوتر",
+                phone = "770000002",
+                printType = "حفر اكريليك وزنكور 3D",
+                costTotal = 95000.0,
+                currency = "YER",
+                notes = "دقة ليزر عالية لأحرف الصيدليات"
+            ),
+            PartnerPrintShop(
+                id = "p3",
+                name = "مؤسسة الأفق لطباعة الفلكس والبنرات الضخمة",
+                phone = "770000003",
+                printType = "فلكس كوري وبنرات يوني بول",
+                costTotal = 230000.0,
+                currency = "YER",
+                notes = "ماكينات إنفينيتي 3.20 متر"
+            )
+        )
+    }
+
     fun observePartners(): Flow<List<PartnerPrintShop>> = callbackFlow {
         val listener = partnersRef.addSnapshotListener { snapshot, error ->
             if (error != null) {
                 handleFirestoreError(error, OperationType.LIST, "partners")
+                trySend(DEFAULT_PARTNERS)
                 return@addSnapshotListener
             }
             val list = snapshot?.documents?.mapNotNull { doc ->
                 doc.toObject(PartnerPrintShop::class.java)?.copy(id = doc.id)
             }.orEmpty()
-            trySend(list)
+            trySend(if (list.isEmpty()) DEFAULT_PARTNERS else list)
         }
         awaitClose { listener.remove() }
     }
@@ -77,12 +110,7 @@ class PartnerRepository(context: Context) {
         try {
             val snapshot = partnersRef.limit(1).get().await()
             if (snapshot.isEmpty) {
-                val defaults = listOf(
-                    PartnerPrintShop(name = "مطبعة الصمود للطباعة الرقمية والأوفست", phone = "770000001", printType = "طباعة أوفست وبروشورات", costTotal = 150000.0, currency = "YER", notes = "تسليم خلال 48 ساعة"),
-                    PartnerPrintShop(name = "مركز إكستريم لحفر وتقطيع الليزر والراوتر", phone = "770000002", printType = "حفر اكريليك وزنكور 3D", costTotal = 95000.0, currency = "YER", notes = "دقة ليزر عالية لأحرف الصيدليات"),
-                    PartnerPrintShop(name = "مؤسسة الأفق لطباعة الفلكس والبنرات الضخمة", phone = "770000003", printType = "فلكس كوري وبنرات يوني بول", costTotal = 230000.0, currency = "YER", notes = "ماكينات إنفينيتي 3.20 متر")
-                )
-                for (p in defaults) {
+                for (p in DEFAULT_PARTNERS) {
                     addPartner(p)
                 }
             }
