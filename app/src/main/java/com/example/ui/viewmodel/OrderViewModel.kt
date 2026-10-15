@@ -37,16 +37,24 @@ class OrderViewModel(
 
     init {
         viewModelScope.launch {
-            materialRepository.observeMaterials().collect { list ->
-                _materials.value = list
+            runCatching {
+                materialRepository.observeMaterials().collect { list ->
+                    _materials.value = list
+                }
+            }.onFailure { e ->
+                android.util.Log.e("OrderViewModel", "observeMaterials safe error: ${e.message}")
             }
         }
     }
 
     fun startObservingOrders(userId: String, isStaff: Boolean) {
         viewModelScope.launch {
-            orderRepository.observeOrdersForUser(userId, isStaff).collect { list ->
-                _orders.value = list
+            runCatching {
+                orderRepository.observeOrdersForUser(userId, isStaff).collect { list ->
+                    _orders.value = list
+                }
+            }.onFailure { e ->
+                android.util.Log.e("OrderViewModel", "observeOrders safe error: ${e.message}")
             }
         }
     }

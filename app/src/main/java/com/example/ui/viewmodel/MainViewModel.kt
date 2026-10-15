@@ -1,6 +1,7 @@
 package com.example.ui.viewmodel
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.model.NotificationItem
@@ -39,11 +40,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         FirebaseAuth.getInstance()
     } catch (e: Exception) {
+        Log.e("MainViewModel", "FirebaseAuth init safeguard: ${e.message}")
         null
     }
 
-    private val _currentUser = MutableStateFlow<FirebaseUser?>(auth?.currentUser)
+    private val _currentUser = MutableStateFlow<FirebaseUser?>(try { auth?.currentUser } catch (e: Exception) { null })
     val currentUser: StateFlow<FirebaseUser?> = _currentUser.asStateFlow()
+
+    private val _isGuestMode = MutableStateFlow(false)
+    val isGuestMode: StateFlow<Boolean> = _isGuestMode.asStateFlow()
 
     private val _userProfile = MutableStateFlow<UserProfile?>(null)
     val userProfile: StateFlow<UserProfile?> = _userProfile.asStateFlow()
@@ -79,34 +84,69 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         // Check if lock should be enabled on start
         viewModelScope.launch {
-            biometricLockManager.isBiometricEnabledFlow.collect { enabled ->
-                if (enabled) {
-                    _isAppLocked.value = true
+            try {
+                biometricLockManager.isBiometricEnabledFlow.collect { enabled ->
+                    if (enabled) {
+                        _isAppLocked.value = true
+                    }
                 }
+            } catch (e: Exception) {
+                Log.e("MainViewModel", "Biometric flow observation error: ${e.message}")
             }
         }
 
-        auth?.addAuthStateListener { firebaseAuth ->
-            val user = firebaseAuth.currentUser
-            _currentUser.value = user
-            if (user != null) {
-                onUserSignedIn(user)
-            } else {
-                _userProfile.value = null
+        try {
+            auth?.addAuthStateListener { firebaseAuth ->
+                val user = try { firebaseAuth.currentUser } catch (e: Exception) { null }
+                _currentUser.value = user
+                if (user != null) {
+                    _isGuestMode.value = false
+                    onUserSignedIn(user)
+                } else if (!_isGuestMode.value) {
+                    _userProfile.value = null
+                }
             }
+        } catch (e: Exception) {
+            Log.e("MainViewModel", "AuthStateListener safeguard: ${e.message}")
         }
+    }
+
+    fun continueAsGuest() {
+        _isGuestMode.value = true
+        _userProfile.value = UserProfile(
+            uid = "guest_client",
+            name = "عميل تجريبي (وضع المعاينة)",
+            email = "client@example.com",
+            phone = "770000000",
+            role = "client"
+        )
+    }
+
+    fun continueAsAdminDemo() {
+        _isGuestMode.value = true
+        _userProfile.value = UserProfile(
+            uid = "admin_demo",
+            name = "سامي البكري (المدير العام - تجريبي)",
+            email = UserRepository.SUPER_ADMIN_EMAIL,
+            phone = UserRepository.SUPER_ADMIN_PHONE,
+            role = "super_admin"
+        )
     }
 
     fun onUserSignedIn(user: FirebaseUser, phoneInput: String? = null) {
         viewModelScope.launch {
-            val profile = userRepository.syncUserProfile(user, phoneInput)
-            _userProfile.value = profile
+            runCatching {
+                val profile = userRepository.syncUserProfile(user, phoneInput)
+                _userProfile.value = profile
 
-            val isStaff = profile.role in listOf("super_admin", "designer")
-            notificationRepository.observeNotificationsForUser(user.uid, isStaff)
-                .collect { list ->
-                    _notifications.value = list
-                }
+                val isStaff = profile.role in listOf("super_admin", "designer")
+                notificationRepository.observeNotificationsForUser(user.uid, isStaff)
+                    .collect { list ->
+                        _notifications.value = list
+                    }
+            }.onFailure { e ->
+                Log.e("MainViewModel", "onUserSignedIn safeguard error: ${e.message}")
+            }
         }
     }
 
@@ -133,10 +173,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun signOut(onComplete: () -> Unit) {
-        auth?.signOut()
+        try {
+            auth?.signOut()
+        } catch (e: Exception) {
+            Log.e("MainViewModel", "SignOut error safeguard: ${e.message}")
+        }
         _currentUser.value = null
         _userProfile.value = null
         _previewAsClient.value = false
+        _isGuestMode.value = false
         onComplete()
     }
 }

@@ -46,9 +46,13 @@ class SignageCalculatorViewModel(private val materialRepository: MaterialReposit
 
     init {
         viewModelScope.launch {
-            materialRepository.observeMaterials().collect { list ->
-                _materials.value = list
-                calculate()
+            runCatching {
+                materialRepository.observeMaterials().collect { list ->
+                    _materials.value = list
+                    calculate()
+                }
+            }.onFailure { e ->
+                android.util.Log.e("SignageCalcVM", "observeMaterials safe error: ${e.message}")
             }
         }
     }
