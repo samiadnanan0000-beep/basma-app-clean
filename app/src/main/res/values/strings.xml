@@ -27,6 +27,7 @@
     <string name="status_completed">🏁 جاهز للتسليم والتركيب</string>
 
     <!-- Biometric & Auth -->
+    <string name="default_web_client_id" translatable="false">905620934158-p6n1jfil9k37jrm6e5s4jeihc9pojrvr.apps.googleusercontent.com</string>
     <string name="biometric_title">تأكيد الهوية - تطبيق بَصْمَة</string>
     <string name="biometric_subtitle">استخدم البصمة أو الوجه للدخول الآمن</string>
     <string name="biometric_negative">استخدام رمز PIN</string>

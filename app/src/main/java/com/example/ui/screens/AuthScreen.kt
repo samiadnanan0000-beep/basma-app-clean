@@ -65,6 +65,8 @@ import com.google.firebase.auth.GoogleAuthProvider
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
+private const val FALLBACK_WEB_CLIENT_ID = "905620934158-p6n1jfil9k37jrm6e5s4jeihc9pojrvr.apps.googleusercontent.com"
+
 @Composable
 fun AuthScreen(
     onAuthSuccess: (FirebaseUser, String) -> Unit
@@ -223,10 +225,15 @@ fun AuthScreen(
                             isLoading = true
                             errorMessage = null
                             val clientId = try {
-                                context.getString(R.string.default_web_client_id)
+                                val resId = context.resources.getIdentifier("default_web_client_id", "string", context.packageName)
+                                if (resId != 0) {
+                                    context.getString(resId)
+                                } else {
+                                    context.getString(R.string.default_web_client_id)
+                                }
                             } catch (e: Exception) {
-                                null
-                            }
+                                FALLBACK_WEB_CLIENT_ID
+                            }.ifBlank { FALLBACK_WEB_CLIENT_ID }
 
                             if (clientId.isNullOrBlank()) {
                                 errorMessage = "إعدادات المصادقة غير مهيأة (default_web_client_id)"
