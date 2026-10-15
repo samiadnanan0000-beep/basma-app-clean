@@ -40,6 +40,13 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Explicitly initialize Firebase first before anything else
+        try {
+            FirebaseApp.initializeApp(this)
+        } catch (e: Exception) {
+            Log.e("App", "Firebase init error", e)
+        }
+
         // Install global uncaught exception handler to prevent silent force-close
         setupGlobalExceptionHandler()
 
@@ -52,7 +59,7 @@ class MainActivity : FragmentActivity() {
                 null
             }
 
-        // Bulletproof Firebase initialization with fallback options
+        // Fallback initialization if FirebaseApp is still not ready
         try {
             if (FirebaseApp.getApps(this).isEmpty()) {
                 val options = FirebaseOptions.Builder()
@@ -61,14 +68,10 @@ class MainActivity : FragmentActivity() {
                     .setProjectId("gen-lang-client-0749483247")
                     .setStorageBucket("gen-lang-client-0749483247.firebasestorage.app")
                     .build()
-                try {
-                    FirebaseApp.initializeApp(this)
-                } catch (_: Exception) {
-                    FirebaseApp.initializeApp(this, options)
-                }
+                FirebaseApp.initializeApp(this, options)
             }
         } catch (e: Throwable) {
-            Log.e("MainActivity", "FirebaseApp init safeguard: ${e.message}")
+            Log.e("MainActivity", "FirebaseApp fallback init safeguard: ${e.message}")
         }
 
         try {
@@ -129,7 +132,13 @@ class MainActivity : FragmentActivity() {
                     .edit()
                     .putString(KEY_LAST_CRASH, fullError)
                     .commit()
-            } catch (_: Exception) {}
+            } catch (_: Throwable) {}
+
+            // Prevent background thread errors (network, Firestore gRPC, coroutines) from terminating the app
+            if (thread.name != "main") {
+                Log.w("GlobalCrashHandler", "Prevented app kill from background thread: ${thread.name}")
+                return@setDefaultUncaughtExceptionHandler
+            }
 
             try {
                 val intent = Intent(applicationContext, MainActivity::class.java).apply {
@@ -137,8 +146,9 @@ class MainActivity : FragmentActivity() {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
                 }
                 startActivity(intent)
+                Thread.sleep(300)
                 android.os.Process.killProcess(android.os.Process.myPid())
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 originalHandler?.uncaughtException(thread, throwable)
             }
         }
