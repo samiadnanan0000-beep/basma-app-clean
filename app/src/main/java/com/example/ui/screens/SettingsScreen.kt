@@ -165,11 +165,39 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.width(14.dp))
 
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = userProfile?.name ?: "مستخدم بصمة",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onSurface
+                        val isActivated = userProfile?.isAccountActivated == true || mainViewModel.isSuperAdmin()
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = userProfile?.name ?: "مستخدم بصمة",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            if (isActivated) {
+                                Spacer(modifier = Modifier.width(6.dp))
+                                com.example.ui.components.VerifiedCheckIcon(
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        com.example.ui.components.ModernVerifiedPillBadge(
+                            isActivated = isActivated,
+                            onUnverifiedClick = {
+                                val adminWhatsApp = appConfig.whatsappNumber.ifBlank { com.example.util.WhatsAppHelper.DEFAULT_ADMIN_WHATSAPP }
+                                com.example.util.WhatsAppHelper.openAccountActivation(
+                                    context = context,
+                                    userName = userProfile?.name ?: "عميل بصمة",
+                                    userPhone = userProfile?.phone ?: "",
+                                    userUid = userProfile?.uid ?: "",
+                                    adminWhatsApp = adminWhatsApp
+                                )
+                            }
                         )
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
                         Text(
                             text = userProfile?.email ?: "",
                             style = MaterialTheme.typography.bodySmall,

@@ -67,10 +67,8 @@ import com.example.ui.screens.OrderTrackingScreen
 import com.example.ui.screens.PartnerLedgerScreen
 import com.example.ui.screens.PortfolioScreen
 import com.example.ui.screens.SettingsScreen
-import com.example.ui.screens.SignageCalculatorScreen
 import com.example.ui.viewmodel.MainViewModel
 import com.example.ui.viewmodel.OrderViewModel
-import com.example.ui.viewmodel.SignageCalculatorViewModel
 
 enum class Screen {
     HOME,
@@ -80,7 +78,6 @@ enum class Screen {
     COMPLAINTS,
     DESIGNER_HUB,
     ADMIN_DASHBOARD,
-    CALCULATOR,
     MATERIALS,
     PARTNERS,
     PORTFOLIO,
@@ -111,10 +108,6 @@ fun AppNavigation(
         OrderViewModel(mainViewModel.orderRepository, mainViewModel.materialRepository)
     }
 
-    val calculatorViewModel = remember {
-        SignageCalculatorViewModel(mainViewModel.materialRepository)
-    }
-
     // Default screen based on role
     var currentScreen by remember(isStaff, isSuperAdmin) {
         mutableStateOf(if (isStaff) Screen.DESIGNER_HUB else Screen.HOME)
@@ -128,7 +121,6 @@ fun AppNavigation(
             val forbiddenForClient = setOf(
                 Screen.DESIGNER_HUB,
                 Screen.ADMIN_DASHBOARD,
-                Screen.CALCULATOR,
                 Screen.MATERIALS,
                 Screen.PARTNERS
             )
@@ -168,7 +160,6 @@ fun AppNavigation(
 
     val designerNavItems = listOf(
         NavItem(Screen.DESIGNER_HUB, "الطلبات", Icons.Default.Dashboard),
-        NavItem(Screen.CALCULATOR, "الحاسبة", Icons.Default.Calculate),
         NavItem(Screen.MATERIALS, "الخامات", Icons.Default.Inventory2),
         NavItem(Screen.COMPLAINTS, "الشكاوى", Icons.Default.ChatBubble),
         NavItem(Screen.SETTINGS, "الإعدادات", Icons.Default.Settings)
@@ -177,7 +168,6 @@ fun AppNavigation(
     val adminNavItems = listOf(
         NavItem(Screen.DESIGNER_HUB, "الطلبات", Icons.Default.Dashboard),
         NavItem(Screen.ADMIN_DASHBOARD, "الإدارة", Icons.Default.AdminPanelSettings),
-        NavItem(Screen.CALCULATOR, "الحاسبة", Icons.Default.Calculate),
         NavItem(Screen.MATERIALS, "الخامات", Icons.Default.Inventory2),
         NavItem(Screen.SETTINGS, "الإعدادات", Icons.Default.Settings)
     )
@@ -340,9 +330,6 @@ fun AppNavigation(
                         orderViewModel = orderViewModel,
                         onNavigateToClientView = { currentScreen = Screen.HOME }
                     )
-                Screen.CALCULATOR -> SignageCalculatorScreen(
-                    calculatorViewModel = calculatorViewModel
-                )
                 Screen.MATERIALS -> MaterialsScreen(
                     materialRepository = mainViewModel.materialRepository
                 )

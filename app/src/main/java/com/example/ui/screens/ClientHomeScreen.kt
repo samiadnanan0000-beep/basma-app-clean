@@ -29,7 +29,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Notifications
@@ -71,7 +70,6 @@ import com.example.ui.viewmodel.MainViewModel
 fun ClientHomeScreen(
     mainViewModel: MainViewModel,
     onNavigateToNewOrder: () -> Unit,
-    onNavigateToCalculator: (() -> Unit)? = null,
     onNavigateToNotifications: () -> Unit,
     onNavigateToComplaints: () -> Unit,
     onNavigateToPortfolio: (() -> Unit)? = null
@@ -139,16 +137,40 @@ fun ClientHomeScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Column {
-                    Text(
-                        text = "مرحباً بك في بَصْمَة 👋",
-                        style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                    Text(
-                        text = "جودة عالمية في تصنيع اللوحات والطباعة الرقمية",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
+                val isActivated = userProfile?.isAccountActivated == true || mainViewModel.isSuperAdmin()
+                val clientDisplayName = userProfile?.name?.ifBlank { "عميل بصمة" } ?: "عميل بصمة"
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "مرحباً $clientDisplayName 👋",
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onBackground,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        if (isActivated) {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            com.example.ui.components.VerifiedCheckIcon(
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    com.example.ui.components.ModernVerifiedPillBadge(
+                        isActivated = isActivated,
+                        onUnverifiedClick = {
+                            val adminWhatsApp = appConfig.whatsappNumber.ifBlank { com.example.util.WhatsAppHelper.DEFAULT_ADMIN_WHATSAPP }
+                            com.example.util.WhatsAppHelper.openAccountActivation(
+                                context = context,
+                                userName = userProfile?.name ?: "عميل بصمة",
+                                userPhone = userProfile?.phone ?: "",
+                                userUid = userProfile?.uid ?: "",
+                                adminWhatsApp = adminWhatsApp
+                            )
+                        }
                     )
                 }
 

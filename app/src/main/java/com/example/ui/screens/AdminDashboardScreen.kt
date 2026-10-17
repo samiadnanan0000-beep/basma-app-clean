@@ -27,7 +27,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.AdminPanelSettings
-import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
@@ -115,7 +114,6 @@ fun AdminDashboardScreen(
         "طلبات التسعير والسداد",
         "الإحصائيات والأرباح",
         "المستخدمين والتفعيل",
-        "الحاسبة القياسية",
         "إعدادات المنصة",
         "الإشعارات العامة"
     )
@@ -244,8 +242,7 @@ fun AdminDashboardScreen(
                         }
                     }
                 )
-                3 -> AdminStandardCalculatorTab()
-                4 -> AdminSettingsConfigTab(
+                3 -> AdminSettingsConfigTab(
                     config = appConfig,
                     onSaveConfig = { cfg ->
                         mainViewModel.updateAppConfig(cfg) {
@@ -253,7 +250,7 @@ fun AdminDashboardScreen(
                         }
                     }
                 )
-                5 -> AdminBroadcastNotificationsTab(
+                4 -> AdminBroadcastNotificationsTab(
                     notifications = notifications,
                     onSendBroadcast = { title, msg, type ->
                         coroutineScope.launch {
@@ -1076,132 +1073,7 @@ fun AdminUsersManagementTab(
 }
 
 // -------------------------------------------------------------
-// TAB 3: Standard Basic Calculator (آلة حاسبة قياسية بسيطة جداً)
-// -------------------------------------------------------------
-@Composable
-fun AdminStandardCalculatorTab() {
-    var display by remember { mutableStateOf("0") }
-    var operand1 by remember { mutableDoubleStateOf(0.0) }
-    var pendingOp by remember { mutableStateOf<String?>(null) }
-    var shouldClearOnNextDigit by remember { mutableStateOf(false) }
-
-    fun onDigit(d: String) {
-        if (display == "0" || shouldClearOnNextDigit) {
-            display = d
-            shouldClearOnNextDigit = false
-        } else {
-            display += d
-        }
-    }
-
-    fun onOp(op: String) {
-        operand1 = display.toDoubleOrNull() ?: 0.0
-        pendingOp = op
-        shouldClearOnNextDigit = true
-    }
-
-    fun onEqual() {
-        val operand2 = display.toDoubleOrNull() ?: 0.0
-        val res = when (pendingOp) {
-            "+" -> operand1 + operand2
-            "-" -> operand1 - operand2
-            "×" -> operand1 * operand2
-            "÷" -> if (operand2 != 0.0) operand1 / operand2 else 0.0
-            else -> operand2
-        }
-        display = if (res % 1.0 == 0.0) res.toLong().toString() else String.format("%.2f", res)
-        pendingOp = null
-        shouldClearOnNextDigit = true
-    }
-
-    fun onClear() {
-        display = "0"
-        operand1 = 0.0
-        pendingOp = null
-        shouldClearOnNextDigit = false
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
-        Text("آلة حاسبة قياسية بسيطة للإدارة", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-
-        // Calculator Screen
-        Card(
-            modifier = Modifier.fillMaxWidth().height(90.dp),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B))
-        ) {
-            Box(
-                modifier = Modifier.fillMaxSize().padding(16.dp),
-                contentAlignment = Alignment.CenterEnd
-            ) {
-                Text(
-                    text = display,
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 32.sp
-                )
-            }
-        }
-
-        // Keypad Grid
-        val buttons = listOf(
-            listOf("C", "÷"),
-            listOf("7", "8", "9", "×"),
-            listOf("4", "5", "6", "-"),
-            listOf("1", "2", "3", "+"),
-            listOf("0", ".", "=")
-        )
-
-        buttons.forEach { row ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                row.forEach { label ->
-                    val isOp = label in listOf("+", "-", "×", "÷", "=")
-                    val isClear = label == "C"
-
-                    Button(
-                        onClick = {
-                            when (label) {
-                                "C" -> onClear()
-                                "=" -> onEqual()
-                                "+", "-", "×", "÷" -> onOp(label)
-                                "." -> if (!display.contains(".")) display += "."
-                                else -> onDigit(label)
-                            }
-                        },
-                        modifier = Modifier.weight(if (label == "C" || label == "=") 1.5f else 1f).height(56.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = when {
-                                isClear -> MaterialTheme.colorScheme.error
-                                isOp -> MaterialTheme.colorScheme.primary
-                                else -> MaterialTheme.colorScheme.surfaceVariant
-                            }
-                        )
-                    ) {
-                        Text(
-                            text = label,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isOp || isClear) Color.White else MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-// -------------------------------------------------------------
-// TAB 4: Settings & Config
+// TAB 3: Settings & Config
 // -------------------------------------------------------------
 @Composable
 fun AdminSettingsConfigTab(

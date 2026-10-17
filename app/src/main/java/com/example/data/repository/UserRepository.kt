@@ -359,6 +359,17 @@ class UserRepository(private val context: Context) {
         }
     }
 
+    suspend fun getFreshAccountActivation(userId: String): Boolean {
+        if (userId.isBlank()) return false
+        return try {
+            val snapshot = usersRef.document(userId).get().await()
+            snapshot.getBoolean("isAccountActivated") ?: false
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.READ, "users/$userId")
+            false
+        }
+    }
+
     // --- Designer Requests ---
     suspend fun submitDesignerUpgradeRequest(request: DesignerUpgradeRequest): Boolean {
         return try {
