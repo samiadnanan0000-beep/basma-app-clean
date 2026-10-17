@@ -549,5 +549,12 @@ fun SettingsScreen(
                 Text("تسجيل الخروج", fontWeight = FontWeight.Bold)
             }
         }
+
+        // Developer documentation & copyright footer
+        item {
+            com.example.ui.components.DeveloperFooter(
+                modifier = Modifier.padding(top = 8.dp)
+            )
+        }
     }
 }

@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
@@ -231,7 +233,11 @@ fun AdminDashboardScreen(
                         )
                     },
                     onUpdateRole = { uid, role -> mainViewModel.updateUserRole(uid, role) },
-                    onApproveDesigner = { reqId, uid -> mainViewModel.approveDesignerUpgrade(reqId, uid) }
+                    onApproveDesigner = { reqId, uid ->
+                        mainViewModel.approveDesignerUpgrade(reqId, uid) {
+                            Toast.makeText(context, "تمت ترقية الشريك واعتماده كمصمم بنجاح ✓", Toast.LENGTH_SHORT).show()
+                        }
+                    }
                 )
                 3 -> AdminStandardCalculatorTab()
                 4 -> AdminSettingsConfigTab(
@@ -867,6 +873,7 @@ fun AdminUsersManagementTab(
 ) {
     var searchQuery by remember { mutableStateOf("") }
 
+    val context = LocalContext.current
     val filtered = allUsers.filter { u ->
         searchQuery.isBlank() || u.name.contains(searchQuery, true) || u.phone.contains(searchQuery)
     }
@@ -882,28 +889,114 @@ fun AdminUsersManagementTab(
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF3C7))
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF3C7)),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text("طلبات الترقية إلى مصمم معتمد (${pendingRequests.size}):", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFF92400E))
-                        Spacer(modifier = Modifier.height(8.dp))
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Campaign,
+                                contentDescription = null,
+                                tint = Color(0xFFD97706),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "طلبات التقديم للعمل كمصمم معتمد (${pendingRequests.size}):",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                                color = Color(0xFF92400E)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
+
                         pendingRequests.forEach { req ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color.White)
                             ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(req.userName, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                    Text("معرض الأعمال: ${req.portfolioUrl}", fontSize = 10.sp, color = Color.Gray)
-                                }
-                                Button(
-                                    onClick = { onApproveDesigner(req.id, req.userId) },
-                                    shape = RoundedCornerShape(8.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A))
-                                ) {
-                                    Text("ترقية كمصمم", fontSize = 11.sp)
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = req.userName.ifBlank { "مستخدم بدون اسم" },
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 13.sp,
+                                                color = Color(0xFF1E293B)
+                                            )
+                                            if (req.userPhone.isNotBlank()) {
+                                                Text(
+                                                    text = "الهاتف: ${req.userPhone}",
+                                                    fontSize = 11.sp,
+                                                    color = Color.Gray
+                                                )
+                                            }
+                                        }
+
+                                        Button(
+                                            onClick = { onApproveDesigner(req.id, req.userId) },
+                                            shape = RoundedCornerShape(8.dp),
+                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A)),
+                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                                        ) {
+                                            Text("ترقية واعتماد كمصمم", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+
+                                    val specs = req.specialties.ifBlank { req.experienceAreas }
+                                    if (specs.isNotBlank()) {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = "مجالات التخصص: $specs",
+                                            fontSize = 11.sp,
+                                            color = Color(0xFF334155),
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+
+                                    if (req.notes.isNotBlank()) {
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = "نبذة وملاحظات: ${req.notes}",
+                                            fontSize = 10.sp,
+                                            color = Color(0xFF64748B)
+                                        )
+                                    }
+
+                                    if (req.portfolioUrl.isNotBlank()) {
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.clickable {
+                                                try {
+                                                    val url = if (req.portfolioUrl.startsWith("http://") || req.portfolioUrl.startsWith("https://")) {
+                                                        req.portfolioUrl
+                                                    } else {
+                                                        "https://${req.portfolioUrl}"
+                                                    }
+                                                    val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                                                    context.startActivity(browserIntent)
+                                                } catch (e: Exception) {
+                                                    Toast.makeText(context, "تعذر فتح الرابط", Toast.LENGTH_SHORT).show()
+                                                }
+                                            }
+                                        ) {
+                                            Text(
+                                                text = "🌐 فتح رابط المعرض: ${req.portfolioUrl}",
+                                                fontSize = 11.sp,
+                                                color = Color(0xFF2563EB),
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }

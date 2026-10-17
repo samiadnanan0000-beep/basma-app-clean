@@ -529,12 +529,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 userName = user.name,
                 userPhone = user.phone,
                 userEmail = user.email,
+                specialties = experience,
                 experienceAreas = experience,
                 portfolioUrl = portfolio,
-                notes = notes
+                notes = notes,
+                status = "PENDING"
             )
+            // Instant local update
+            _designerRequests.value = _designerRequests.value + req
             val ok = userRepository.submitDesignerUpgradeRequest(req)
-            if (ok) onSuccess() else onError("تعذر إرسال الطلب، يرجى المحاولة لاحقاً")
+            if (ok) {
+                onSuccess()
+            } else {
+                _designerRequests.value = _designerRequests.value.filter { it.userId != user.uid }
+                onError("تعذر إرسال الطلب، يرجى المحاولة لاحقاً")
+            }
         }
     }
 

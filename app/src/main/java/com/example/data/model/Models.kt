@@ -209,9 +209,13 @@ data class DesignerUpgradeRequest(
     val userName: String = "",
     val userPhone: String = "",
     val userEmail: String = "",
+    val specialties: String = "",
     val experienceAreas: String = "",
     val portfolioUrl: String = "",
     val notes: String = "",
     val status: String = "PENDING", // "PENDING", "APPROVED", "REJECTED"
     @ServerTimestamp val createdAt: Timestamp? = null
-)
+) {
+    val displaySpecialties: String
+        get() = specialties.ifBlank { experienceAreas }
+}
