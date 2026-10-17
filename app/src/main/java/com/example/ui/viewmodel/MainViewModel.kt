@@ -397,6 +397,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun updateUserRole(userId: String, newRole: String, onDone: () -> Unit = {}) {
         viewModelScope.launch {
             try {
+                _allUsers.value = _allUsers.value.map {
+                    if (it.uid == userId) it.copy(role = newRole) else it
+                }
                 userRepository.updateUserRole(userId, newRole)
                 onDone()
             } catch (e: Exception) {

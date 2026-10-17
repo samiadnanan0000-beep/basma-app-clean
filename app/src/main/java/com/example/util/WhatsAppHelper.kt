@@ -78,4 +78,25 @@ object WhatsAppHelper {
 
         openChat(context, adminWhatsApp, message)
     }
+
+    /**
+     * Formats and opens designer application message with CV request via WhatsApp.
+     */
+    fun openDesignerApplication(
+        context: Context,
+        userName: String,
+        userPhone: String,
+        userUid: String,
+        adminWhatsApp: String = DEFAULT_ADMIN_WHATSAPP
+    ) {
+        val message = """
+            السلام عليكم إدارة تطبيق بصمة، أود التقديم للانضمام كشريك تصميم (مصمم معتمد):
+            - الاسم: $userName
+            - رقم الهاتف المسجل: $userPhone
+            - معرف الحساب: $userUid
+            (مرفق لكم في هذه المحادثة ملف السيرة الذاتية CV ونماذج من أعمالي السابقة للاطلاع والاعتماد)
+        """.trimIndent()
+
+        openChat(context, adminWhatsApp, message)
+    }
 }

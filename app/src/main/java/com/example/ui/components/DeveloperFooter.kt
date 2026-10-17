@@ -12,10 +12,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -39,7 +37,7 @@ fun DeveloperFooter(
         modifier = modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(vertical = 12.dp, horizontal = 16.dp)
+            .padding(bottom = 8.dp, top = 4.dp, start = 16.dp, end = 16.dp)
             .testTag("developer_footer"),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
@@ -47,24 +45,24 @@ fun DeveloperFooter(
         Text(
             text = "إعداد وتطوير : سامي عدنان البكري - ",
             fontSize = 12.sp,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
-            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+            fontWeight = FontWeight.Normal,
             textAlign = TextAlign.Center
         )
 
         Text(
             text = phoneNumber,
-            fontSize = 12.sp,
+            fontSize = 13.sp,
             fontWeight = FontWeight.Bold,
-            color = Color(0xFF2563EB), // Distinct interactive blue
+            color = MaterialTheme.colorScheme.primary, // Prominent theme primary color
             textDecoration = TextDecoration.Underline,
             modifier = Modifier
                 .clickable {
                     try {
-                        val dialIntent = Intent(Intent.ACTION_DIAL).apply {
+                        val intent = Intent(Intent.ACTION_DIAL).apply {
                             data = Uri.parse("tel:$phoneNumber")
                         }
-                        context.startActivity(dialIntent)
+                        context.startActivity(intent)
                     } catch (e: Exception) {
                         Toast.makeText(context, "تعذر فتح تطبيق الاتصال", Toast.LENGTH_SHORT).show()
                     }

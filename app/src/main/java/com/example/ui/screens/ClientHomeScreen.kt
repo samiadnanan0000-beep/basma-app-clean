@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -81,6 +82,8 @@ fun ClientHomeScreen(
     val unreadCount = unreadNotifs.count { !it.isRead }
     val isPreviewingAsClient by mainViewModel.previewAsClient.collectAsState()
     val userProfile by mainViewModel.userProfile.collectAsState()
+    val appConfig by mainViewModel.appConfig.collectAsState()
+    val isClientRole = userProfile?.role?.uppercase() !in listOf("ADMIN", "SUPER_ADMIN", "DESIGNER")
 
     LazyColumn(
         modifier = Modifier
@@ -344,6 +347,84 @@ fun ClientHomeScreen(
                             style = MaterialTheme.typography.labelSmall,
                             color = Color.White.copy(alpha = 0.85f)
                         )
+                    }
+                }
+            }
+        }
+
+        // Apply as Designer Partner Card (for clients only)
+        if (isClientRole) {
+            item {
+                Card(
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("home_designer_upgrade_card")
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(42.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primary),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Palette,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "الانضمام كشريك تصميم / التقديم للعمل كمصمم 🎨",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "أرسل سيرتك الذاتية (CV) ونماذج أعمالك مباشرة لإدارة بصمة عبر واتساب.",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Button(
+                            onClick = {
+                                Toast.makeText(
+                                    context,
+                                    "جارٍ توجيهك لواتساب الإدارة؛ يرجى إرفاق سيرتك الذاتية (CV) ونماذج أعمالك في المحادثة.",
+                                    Toast.LENGTH_LONG
+                                ).show()
+
+                                val adminWhatsApp = appConfig.whatsappNumber.ifBlank { com.example.util.WhatsAppHelper.DEFAULT_ADMIN_WHATSAPP }
+                                com.example.util.WhatsAppHelper.openDesignerApplication(
+                                    context = context,
+                                    userName = userProfile?.name?.ifBlank { "عميل بصمة" } ?: "عميل بصمة",
+                                    userPhone = userProfile?.phone.orEmpty(),
+                                    userUid = userProfile?.uid.orEmpty(),
+                                    adminWhatsApp = adminWhatsApp
+                                )
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(44.dp)
+                                .testTag("home_apply_designer_button"),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            Icon(Icons.Default.Palette, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("التقديم للعمل كمصمم (إرسال CV عبر واتساب)", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        }
                     }
                 }
             }

@@ -72,133 +72,11 @@ fun SettingsScreen(
     val isBiometricEnabled by mainViewModel.isBiometricEnabled.collectAsState()
     val designerRequests by mainViewModel.designerRequests.collectAsState()
 
+    val appConfig by mainViewModel.appConfig.collectAsState()
     val isClientRole = userProfile?.role?.uppercase() !in listOf("ADMIN", "SUPER_ADMIN", "DESIGNER")
-    val userPendingRequest = designerRequests.firstOrNull { it.userId == userProfile?.uid && it.status == "PENDING" }
 
     var showChangePinDialog by remember { mutableStateOf(false) }
     var newPinInput by remember { mutableStateOf("") }
-
-    var showUpgradeDialog by remember { mutableStateOf(false) }
-    var experienceInput by remember { mutableStateOf("") }
-    var portfolioUrlInput by remember { mutableStateOf("") }
-    var notesInput by remember { mutableStateOf("") }
-    var isSubmittingUpgrade by remember { mutableStateOf(false) }
-
-    // Designer Upgrade Request Dialog
-    if (showUpgradeDialog) {
-        AlertDialog(
-            onDismissRequest = { if (!isSubmittingUpgrade) showUpgradeDialog = false },
-            icon = {
-                Icon(
-                    imageVector = Icons.Default.Palette,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(36.dp)
-                )
-            },
-            title = {
-                Text(
-                    text = "طلب الانضمام كشريك تصميم 🎨",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 17.sp
-                )
-            },
-            text = {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        text = "انضم إلى شبكة مصممي بصمة المعتمدين لتنفيذ الطلبات وحساب مستحقاتك لكل تصميم بدقة.",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    OutlinedTextField(
-                        value = experienceInput,
-                        onValueChange = { experienceInput = it },
-                        label = { Text("مجالات الخبرة والتخصص *") },
-                        placeholder = { Text("مثال: هويات بصرية، بنرات، سوشيال ميديا، لوحات...") },
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth().testTag("upgrade_experience_input")
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    OutlinedTextField(
-                        value = portfolioUrlInput,
-                        onValueChange = { portfolioUrlInput = it },
-                        label = { Text("رابط معرض الأعمال (Portfolio URL) *") },
-                        placeholder = { Text("Behance / Google Drive / موقعك الشخصي") },
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth().testTag("upgrade_portfolio_url_input")
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    OutlinedTextField(
-                        value = notesInput,
-                        onValueChange = { notesInput = it },
-                        label = { Text("ملاحظات إضافية أو برامج التصميم المتقنة") },
-                        placeholder = { Text("Photoshop, Illustrator, 3Ds Max...") },
-                        minLines = 2,
-                        maxLines = 4,
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth().testTag("upgrade_notes_input")
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        val exp = experienceInput.trim()
-                        val port = portfolioUrlInput.trim()
-                        if (exp.isBlank()) {
-                            Toast.makeText(context, "يرجى توضيح مجالات التخصص والخبرة", Toast.LENGTH_SHORT).show()
-                            return@Button
-                        }
-                        if (port.isBlank()) {
-                            Toast.makeText(context, "يرجى إدخال رابط معرض أعمالك", Toast.LENGTH_SHORT).show()
-                            return@Button
-                        }
-
-                        isSubmittingUpgrade = true
-                        mainViewModel.submitDesignerUpgrade(
-                            experience = exp,
-                            portfolio = port,
-                            notes = notesInput.trim(),
-                            onSuccess = {
-                                isSubmittingUpgrade = false
-                                showUpgradeDialog = false
-                                experienceInput = ""
-                                portfolioUrlInput = ""
-                                notesInput = ""
-                                Toast.makeText(context, "تم إرسال طلب الترقية، ستتم مراجعته من الإدارة قريباً", Toast.LENGTH_LONG).show()
-                            },
-                            onError = { err ->
-                                isSubmittingUpgrade = false
-                                Toast.makeText(context, err, Toast.LENGTH_LONG).show()
-                            }
-                        )
-                    },
-                    enabled = !isSubmittingUpgrade,
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.testTag("submit_upgrade_request_button")
-                ) {
-                    Text("إرسال الطلب", fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                OutlinedButton(
-                    onClick = { showUpgradeDialog = false },
-                    enabled = !isSubmittingUpgrade,
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text("إلغاء")
-                }
-            }
-        )
-    }
 
     if (showChangePinDialog) {
         AlertDialog(
@@ -312,88 +190,77 @@ fun SettingsScreen(
             }
         }
 
-        // Designer Role Upgrade Card for Clients
+        // Designer Role Upgrade Card for Clients (via WhatsApp Application)
         if (isClientRole) {
             item {
-                if (userPendingRequest != null) {
-                    Card(
-                        shape = RoundedCornerShape(22.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF3C7)),
-                        modifier = Modifier.fillMaxWidth().testTag("designer_pending_request_card")
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(18.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
+                Card(
+                    shape = RoundedCornerShape(22.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)),
+                    modifier = Modifier.fillMaxWidth().testTag("designer_upgrade_card")
+                ) {
+                    Column(modifier = Modifier.padding(18.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(
                                 modifier = Modifier
                                     .size(46.dp)
                                     .clip(CircleShape)
-                                    .background(Color(0xFFD97706).copy(alpha = 0.2f)),
+                                    .background(MaterialTheme.colorScheme.primary),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Icon(Icons.Default.HourglassEmpty, contentDescription = null, tint = Color(0xFFD97706))
+                                Icon(
+                                    imageVector = Icons.Default.Palette,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(24.dp)
+                                )
                             }
                             Spacer(modifier = Modifier.width(14.dp))
-                            Column {
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "طلبك للانضمام كمصمم قيد المراجعة ⏳",
+                                    text = "الانضمام كشريك تصميم / التقديم للعمل كمصمم 🎨",
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 14.sp,
-                                    color = Color(0xFF92400E)
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = "تم استلام بياناتك ومعرض أعمالك بنجاح، وطلبك حالياً قيد التدقيق والاعتماد من قِبل الإدارة.",
+                                    text = "هل تمتلك مهارات التصميم الإعلاني؟ انضم لشبكة مصممي بصمة المعتمدين لتنفيذ الطلبات وحساب أتعابك لكل تصميم.",
                                     fontSize = 11.sp,
-                                    color = Color(0xFFB45309),
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
                                     lineHeight = 16.sp
                                 )
                             }
                         }
-                    }
-                } else {
-                    Card(
-                        shape = RoundedCornerShape(22.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)),
-                        modifier = Modifier.fillMaxWidth().testTag("designer_upgrade_card")
-                    ) {
-                        Column(modifier = Modifier.padding(18.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(44.dp)
-                                        .clip(CircleShape)
-                                        .background(MaterialTheme.colorScheme.primary),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(Icons.Default.Palette, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
-                                }
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Column {
-                                    Text(
-                                        text = "الانضمام كشريك تصميم / طلب ترقية لمصمم 🎨",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 14.sp,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    Text(
-                                        text = "هل تمتلك مهارات التصميم الإعلاني؟ انضم لفريق بصمة واستلم طلبات التصميم.",
-                                        fontSize = 11.sp,
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                                    )
-                                }
-                            }
 
-                            Spacer(modifier = Modifier.height(14.dp))
+                        Spacer(modifier = Modifier.height(14.dp))
 
-                            Button(
-                                onClick = { showUpgradeDialog = true },
-                                modifier = Modifier.fillMaxWidth().height(44.dp).testTag("open_designer_upgrade_dialog_button"),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Text("تقديم طلب ترقية لمصمم معتمد", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                            }
+                        Button(
+                            onClick = {
+                                Toast.makeText(
+                                    context,
+                                    "جارٍ توجيهك لواتساب الإدارة؛ يرجى إرفاق سيرتك الذاتية (CV) ونماذج أعمالك في المحادثة.",
+                                    Toast.LENGTH_LONG
+                                ).show()
+
+                                val adminWhatsApp = appConfig.whatsappNumber.ifBlank { com.example.util.WhatsAppHelper.DEFAULT_ADMIN_WHATSAPP }
+                                com.example.util.WhatsAppHelper.openDesignerApplication(
+                                    context = context,
+                                    userName = userProfile?.name?.ifBlank { "عميل بصمة" } ?: "عميل بصمة",
+                                    userPhone = userProfile?.phone.orEmpty(),
+                                    userUid = userProfile?.uid.orEmpty(),
+                                    adminWhatsApp = adminWhatsApp
+                                )
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(46.dp)
+                                .testTag("apply_as_designer_button"),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            Icon(Icons.Default.Palette, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("التقديم للعمل كمصمم (إرسال CV عبر واتساب)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         }
                     }
                 }

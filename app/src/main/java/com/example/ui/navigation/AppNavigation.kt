@@ -138,6 +138,9 @@ fun AppNavigation(
         } else if (!isSuperAdmin && currentScreen == Screen.ADMIN_DASHBOARD) {
             // Only Super Admin can access the Admin Dashboard
             currentScreen = Screen.DESIGNER_HUB
+        } else if (isStaff && currentScreen == Screen.HOME && !isPreviewingAsClient) {
+            // Switch newly promoted designer or staff to designer hub
+            currentScreen = Screen.DESIGNER_HUB
         }
     }
 

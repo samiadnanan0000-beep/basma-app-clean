@@ -232,7 +232,12 @@ fun AdminDashboardScreen(
                             }
                         )
                     },
-                    onUpdateRole = { uid, role -> mainViewModel.updateUserRole(uid, role) },
+                    onUpdateRole = { uid, role ->
+                        mainViewModel.updateUserRole(uid, role) {
+                            val roleLabel = if (role == UserRepository.ROLE_DESIGNER) "مصمم معتمد" else "عميل"
+                            Toast.makeText(context, "تم تغيير رتبة المستخدم إلى $roleLabel بنجاح ✓", Toast.LENGTH_SHORT).show()
+                        }
+                    },
                     onApproveDesigner = { reqId, uid ->
                         mainViewModel.approveDesignerUpgrade(reqId, uid) {
                             Toast.makeText(context, "تمت ترقية الشريك واعتماده كمصمم بنجاح ✓", Toast.LENGTH_SHORT).show()
