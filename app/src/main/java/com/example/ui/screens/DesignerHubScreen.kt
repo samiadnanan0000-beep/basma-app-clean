@@ -88,8 +88,18 @@ fun DesignerHubScreen(
     var selectedTab by remember { mutableIntStateOf(0) }
     var chatOrder by remember { mutableStateOf<OrderItem?>(null) }
     var rejectDialogOrder by remember { mutableStateOf<OrderItem?>(null) }
+    var previewImageUrl by remember { mutableStateOf<String?>(null) }
+    var previewImageTitle by remember { mutableStateOf("معاينة المرفق") }
 
     val designerId = userProfile?.uid.orEmpty()
+
+    if (previewImageUrl != null) {
+        com.example.ui.components.FullScreenImagePreviewDialog(
+            imageUrl = previewImageUrl!!,
+            title = previewImageTitle,
+            onDismiss = { previewImageUrl = null }
+        )
+    }
 
     LaunchedEffect(designerId) {
         if (designerId.isNotBlank()) {
@@ -216,6 +226,10 @@ fun DesignerHubScreen(
                         context = context,
                         message = "السلام عليكم إدارة بصمة، تم إنجاز مسودة التصميم للطلب رقم ${order.displayOrderNumber} (${order.designType})، يرجى التكرم بالمراجعة وإرسالها للعميل."
                     )
+                },
+                onPreviewImage = { url, title ->
+                    previewImageUrl = url
+                    previewImageTitle = title
                 }
             )
             1 -> DesignerEarningsTab(
@@ -235,7 +249,8 @@ fun DesignerTasksTab(
     onAcceptOrder: (OrderItem) -> Unit,
     onRequestReject: (OrderItem) -> Unit,
     onOpenChat: (OrderItem) -> Unit,
-    onSubmitDraftToAdmin: (OrderItem) -> Unit
+    onSubmitDraftToAdmin: (OrderItem) -> Unit,
+    onPreviewImage: (String, String) -> Unit = { _, _ -> }
 ) {
     if (orders.isEmpty()) {
         Box(
@@ -274,7 +289,8 @@ fun DesignerTasksTab(
                     onAccept = { onAcceptOrder(order) },
                     onReject = { onRequestReject(order) },
                     onOpenChat = { onOpenChat(order) },
-                    onSubmitDraft = { onSubmitDraftToAdmin(order) }
+                    onSubmitDraft = { onSubmitDraftToAdmin(order) },
+                    onPreviewImage = onPreviewImage
                 )
             }
         }
@@ -287,7 +303,8 @@ fun DesignerTaskCard(
     onAccept: () -> Unit,
     onReject: () -> Unit,
     onOpenChat: () -> Unit,
-    onSubmitDraft: () -> Unit
+    onSubmitDraft: () -> Unit,
+    onPreviewImage: (String, String) -> Unit = { _, _ -> }
 ) {
     val isPendingAcceptance = order.status == OrderStatus.PENDING_DESIGNER_ACCEPTANCE
 
@@ -375,13 +392,14 @@ fun DesignerTaskCard(
             // Reference Attachment preview if available
             if (order.referenceAttachmentUrl.isNotBlank()) {
                 Spacer(modifier = Modifier.height(8.dp))
-                Row(
+                OutlinedButton(
+                    onClick = { onPreviewImage(order.referenceAttachmentUrl, "المرفق المرجعي للطلب") },
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
+                    shape = RoundedCornerShape(8.dp)
                 ) {
                     Icon(Icons.Default.Image, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("يوجد مرفق / صورة مرجعية للطلب", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
+                    Text("معاينة المرفق المرجعي للطلب 🖼️", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
                 }
             }
 

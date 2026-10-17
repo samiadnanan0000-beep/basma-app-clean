@@ -84,6 +84,16 @@ fun OrderTrackingScreen(
 
     var chatOrder by remember { mutableStateOf<OrderItem?>(null) }
     var ratingOrder by remember { mutableStateOf<OrderItem?>(null) }
+    var previewImageUrl by remember { mutableStateOf<String?>(null) }
+    var previewImageTitle by remember { mutableStateOf("معاينة الصورة") }
+
+    if (previewImageUrl != null) {
+        com.example.ui.components.FullScreenImagePreviewDialog(
+            imageUrl = previewImageUrl!!,
+            title = previewImageTitle,
+            onDismiss = { previewImageUrl = null }
+        )
+    }
 
     if (paymentOrder != null) {
         AdvancePaymentDialog(
@@ -195,6 +205,10 @@ fun OrderTrackingScreen(
                             context = context,
                             message = "مرحباً إدارة بصمة، بخصوص طلبي ${order.displayOrderNumber} (${order.designType}):"
                         )
+                    },
+                    onPreviewImage = { url, title ->
+                        previewImageUrl = url
+                        previewImageTitle = title
                     }
                 )
             }
@@ -210,7 +224,8 @@ fun OrderTrackingCard(
     onCancelOrder: () -> Unit,
     onOpenChat: () -> Unit,
     onOpenRating: () -> Unit,
-    onContactWhatsApp: () -> Unit
+    onContactWhatsApp: () -> Unit,
+    onPreviewImage: (imageUrl: String, title: String) -> Unit = { _, _ -> }
 ) {
     Card(
         shape = RoundedCornerShape(22.dp),
@@ -280,6 +295,46 @@ fun OrderTrackingCard(
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
                     )
+                }
+            }
+
+            // Attachments & Receipts preview buttons
+            if (order.referenceAttachmentUrl.isNotBlank() || order.advanceReceiptUrl.isNotBlank() || order.finalReceiptUrl.isNotBlank()) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (order.referenceAttachmentUrl.isNotBlank()) {
+                        OutlinedButton(
+                            onClick = { onPreviewImage(order.referenceAttachmentUrl, "المرفق المرجعي للطلب") },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
+                        ) {
+                            Text("المرفق 🖼️", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    if (order.advanceReceiptUrl.isNotBlank()) {
+                        OutlinedButton(
+                            onClick = { onPreviewImage(order.advanceReceiptUrl, "إشعار الدفعة المقدمة (70%)") },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
+                        ) {
+                            Text("إشعار 70% 👁️", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    if (order.finalReceiptUrl.isNotBlank()) {
+                        OutlinedButton(
+                            onClick = { onPreviewImage(order.finalReceiptUrl, "إشعار الدفعة النهائية (30%)") },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
+                        ) {
+                            Text("إشعار 30% 👁️", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
                 }
             }
 

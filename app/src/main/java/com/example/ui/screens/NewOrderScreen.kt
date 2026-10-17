@@ -40,6 +40,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -89,6 +90,8 @@ fun NewOrderScreen(
     var contactPhoneInput by remember { mutableStateOf(userProfile?.phone.orEmpty()) }
     var referenceAttachmentUrl by remember { mutableStateOf("") }
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
+    var isUploadingAttachment by remember { mutableStateOf(false) }
+    var previewAttachmentUrl by remember { mutableStateOf<String?>(null) }
 
     var showActivationDialog by remember { mutableStateOf(false) }
     var showSuccessDialog by remember { mutableStateOf(false) }
@@ -100,11 +103,30 @@ fun NewOrderScreen(
     ) { uri: Uri? ->
         if (uri != null) {
             selectedImageUri = uri
-            referenceAttachmentUrl = uri.toString()
+            validationError = null
+            isUploadingAttachment = true
+            coroutineScope.launch {
+                val result = com.example.util.FirebaseStorageHelper.uploadOrderAttachment(
+                    context = context,
+                    uri = uri,
+                    userId = userProfile?.uid.orEmpty()
+                )
+                result.fold(
+                    onSuccess = { downloadUrl ->
+                        referenceAttachmentUrl = downloadUrl
+                        isUploadingAttachment = false
+                        Toast.makeText(context, "تم رفع المرفق للسحابة بنجاح ✓", Toast.LENGTH_SHORT).show()
+                    },
+                    onFailure = { err ->
+                        isUploadingAttachment = false
+                        Toast.makeText(context, "فشل رفع المرفق للسحابة: ${err.message}", Toast.LENGTH_LONG).show()
+                    }
+                )
+            }
         }
     }
 
-    val finalAttachment = referenceAttachmentUrl.ifBlank { selectedImageUri?.toString().orEmpty() }
+    val finalAttachment = referenceAttachmentUrl.trim().let { if (it.startsWith("http", ignoreCase = true)) it else "" }
 
     LazyColumn(
         modifier = Modifier
@@ -371,21 +393,59 @@ fun NewOrderScreen(
                         modifier = Modifier.fillMaxWidth()
                     )
 
+                    // Uploading progress indicator
+                    if (isUploadingAttachment) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f))
+                                .padding(12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "جارٍ رفع الصورة للسحابة...",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            LinearProgressIndicator(
+                                modifier = Modifier.fillMaxWidth().height(6.dp),
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+
                     if (finalAttachment.isNotBlank()) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(130.dp)
+                                .height(150.dp)
                                 .clip(RoundedCornerShape(12.dp))
                                 .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+                                .clickable { previewAttachmentUrl = finalAttachment }
                         ) {
-                            AsyncImage(
-                                model = finalAttachment,
+                            com.example.ui.components.SafeAsyncImage(
+                                imageUrl = finalAttachment,
                                 contentDescription = "معاينة المرفق",
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Fit
                             )
+                            Surface(
+                                shape = CircleShape,
+                                color = Color.Black.copy(alpha = 0.6f),
+                                modifier = Modifier.align(Alignment.BottomStart).padding(6.dp)
+                            ) {
+                                Text(
+                                    text = "🔍 اضغط للتكبير الكامل",
+                                    color = Color.White,
+                                    fontSize = 10.sp,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                )
+                            }
                             IconButton(
                                 onClick = {
                                     selectedImageUri = null
@@ -484,7 +544,7 @@ fun NewOrderScreen(
                         showSuccessDialog = true
                     }
                 },
-                enabled = !isSubmitting,
+                enabled = !isSubmitting && !isUploadingAttachment,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(54.dp)
@@ -492,7 +552,7 @@ fun NewOrderScreen(
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
             ) {
-                if (isSubmitting) {
+                if (isSubmitting || isUploadingAttachment) {
                     CircularProgressIndicator(modifier = Modifier.size(22.dp), color = Color.White)
                 } else {
                     Icon(Icons.Default.Send, contentDescription = null, tint = Color.White)
@@ -630,6 +690,15 @@ fun NewOrderScreen(
                     Text("متابعة طلباتي", fontWeight = FontWeight.Bold)
                 }
             }
+        )
+    }
+
+    // 3. Fullscreen Image Preview Dialog
+    if (previewAttachmentUrl != null) {
+        com.example.ui.components.FullScreenImagePreviewDialog(
+            imageUrl = previewAttachmentUrl!!,
+            title = "معاينة المرفق المرجعي للطلب",
+            onDismiss = { previewAttachmentUrl = null }
         )
     }
 }

@@ -435,6 +435,20 @@ fun AdminOrderCard(
                 }
             }
 
+            // Reference Attachment preview if available
+            if (order.referenceAttachmentUrl.isNotBlank()) {
+                Spacer(modifier = Modifier.height(6.dp))
+                OutlinedButton(
+                    onClick = { onPreviewReceipt(order.referenceAttachmentUrl) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Icon(Icons.Default.Image, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("معاينة المرفق المرجعي للطلب 🖼️", fontSize = 12.sp)
+                }
+            }
+
             Spacer(modifier = Modifier.height(10.dp))
 
             // Action Buttons based on status:
@@ -746,30 +760,10 @@ fun AssignDesignerDialog(
 // -------------------------------------------------------------
 @Composable
 fun ReceiptPreviewDialog(imageUrl: String, onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("معاينة إشعار التحويل البنكي", fontWeight = FontWeight.Bold, fontSize = 15.sp) },
-        text = {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(350.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color.Black)
-            ) {
-                AsyncImage(
-                    model = imageUrl,
-                    contentDescription = "صورة الإشعار",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Fit
-                )
-            }
-        },
-        confirmButton = {
-            Button(onClick = onDismiss, shape = RoundedCornerShape(10.dp)) {
-                Text("إغلاق")
-            }
-        }
+    com.example.ui.components.FullScreenImagePreviewDialog(
+        imageUrl = imageUrl,
+        title = "معاينة إشعار السداد والمرفقات",
+        onDismiss = onDismiss
     )
 }
 

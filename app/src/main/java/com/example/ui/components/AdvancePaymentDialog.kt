@@ -40,6 +40,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -91,22 +92,43 @@ fun AdvancePaymentDialog(
 
     var receiptImageUri by remember { mutableStateOf<Uri?>(null) }
     var receiptImageUrl by remember { mutableStateOf("") }
+    var isUploading by remember { mutableStateOf(false) }
     var isSubmitting by remember { mutableStateOf(false) }
     var validationError by remember { mutableStateOf<String?>(null) }
+    var previewReceiptUrl by remember { mutableStateOf<String?>(null) }
 
-    // Android Zero-Permission PhotoPicker
+    // Android Zero-Permission PhotoPicker with immediate Firebase Storage upload
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
         if (uri != null) {
             receiptImageUri = uri
-            receiptImageUrl = uri.toString()
             validationError = null
+            isUploading = true
+            coroutineScope.launch {
+                val result = com.example.util.FirebaseStorageHelper.uploadReceiptImage(
+                    context = context,
+                    uri = uri,
+                    userId = order.clientId.ifBlank { "client" }
+                )
+                result.fold(
+                    onSuccess = { downloadUrl ->
+                        receiptImageUrl = downloadUrl
+                        isUploading = false
+                        Toast.makeText(context, "تم رفع صورة الإشعار للسحابة بنجاح ✓", Toast.LENGTH_SHORT).show()
+                    },
+                    onFailure = { error ->
+                        isUploading = false
+                        validationError = "فشل رفع الصورة: ${error.message}"
+                        Toast.makeText(context, "فشل رفع الصورة للسحابة: ${error.message}", Toast.LENGTH_LONG).show()
+                    }
+                )
+            }
         }
     }
 
-    val finalReceiptPath = receiptImageUrl.ifBlank { receiptImageUri?.toString().orEmpty() }
-    val isFormComplete = selectedWallet.isNotBlank() && finalReceiptPath.isNotBlank()
+    val finalReceiptPath = receiptImageUrl.trim()
+    val isFormComplete = selectedWallet.isNotBlank() && finalReceiptPath.isNotBlank() && finalReceiptPath.startsWith("http", ignoreCase = true)
 
     AlertDialog(
         onDismissRequest = { if (!isSubmitting) onDismiss() },
@@ -347,22 +369,60 @@ fun AdvancePaymentDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
 
+                // Uploading progress indicator
+                if (isUploading) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f))
+                            .padding(12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "جارٍ رفع الصورة للسحابة...",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        LinearProgressIndicator(
+                            modifier = Modifier.fillMaxWidth().height(6.dp),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+
                 // Thumbnail preview if attached
                 if (finalReceiptPath.isNotBlank()) {
                     Spacer(modifier = Modifier.height(10.dp))
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(150.dp)
+                            .height(160.dp)
                             .clip(RoundedCornerShape(12.dp))
                             .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+                            .clickable { previewReceiptUrl = finalReceiptPath }
                     ) {
-                        AsyncImage(
-                            model = finalReceiptPath,
+                        SafeAsyncImage(
+                            imageUrl = finalReceiptPath,
                             contentDescription = "معاينة إشعار التحويل",
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Fit
                         )
+                        Surface(
+                            shape = CircleShape,
+                            color = Color.Black.copy(alpha = 0.6f),
+                            modifier = Modifier.align(Alignment.BottomStart).padding(6.dp)
+                        ) {
+                            Text(
+                                text = "🔍 اضغط للتكبير الكامل",
+                                color = Color.White,
+                                fontSize = 10.sp,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
+                        }
                         IconButton(
                             onClick = {
                                 receiptImageUri = null
@@ -394,7 +454,7 @@ fun AdvancePaymentDialog(
             Button(
                 onClick = {
                     if (!isFormComplete) {
-                        validationError = "يرجى اختيار المحفظة وإرفاق صورة الإشعار أولاً"
+                        validationError = "يرجى اختيار المحفظة وإرفاق صورة الإشعار أولاً والانتظار حتى اكتمال الرفع للسحابة"
                         return@Button
                     }
 
@@ -433,12 +493,12 @@ fun AdvancePaymentDialog(
                         )
                     }
                 },
-                enabled = isFormComplete && !isSubmitting,
+                enabled = isFormComplete && !isSubmitting && !isUploading,
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
                 modifier = Modifier.testTag("submit_advance_payment_button")
             ) {
-                if (isSubmitting) {
+                if (isSubmitting || isUploading) {
                     CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
                 } else {
                     Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
@@ -450,11 +510,38 @@ fun AdvancePaymentDialog(
         dismissButton = {
             OutlinedButton(
                 onClick = onDismiss,
-                enabled = !isSubmitting,
+                enabled = !isSubmitting && !isUploading,
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Text("إلغاء")
             }
         }
+    )
+
+    if (previewReceiptUrl != null) {
+        FullScreenImagePreviewDialog(
+            imageUrl = previewReceiptUrl!!,
+            title = if (isFinalPayment) "معاينة إشعار الدفعة النهائية" else "معاينة إشعار الدفعة المقدمة",
+            onDismiss = { previewReceiptUrl = null }
+        )
+    }
+}
+
+/**
+ * Dedicated wrapper component for Final Payment dialog.
+ */
+@Composable
+fun FinalPaymentDialog(
+    order: OrderItem,
+    orderViewModel: OrderViewModel,
+    onDismiss: () -> Unit,
+    onPaymentSubmitted: () -> Unit
+) {
+    AdvancePaymentDialog(
+        order = order,
+        orderViewModel = orderViewModel,
+        isFinalPayment = true,
+        onDismiss = onDismiss,
+        onPaymentSubmitted = onPaymentSubmitted
     )
 }
