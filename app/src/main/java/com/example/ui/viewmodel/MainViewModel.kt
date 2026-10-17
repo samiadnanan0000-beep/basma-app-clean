@@ -480,9 +480,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return role == UserRepository.ROLE_DESIGNER
     }
 
-    fun toggleAccountActivation(userId: String, isActivated: Boolean) {
+    fun toggleAccountActivation(
+        userId: String,
+        isActivated: Boolean,
+        onSuccess: () -> Unit = {},
+        onError: (String) -> Unit = {}
+    ) {
         viewModelScope.launch {
-            userRepository.toggleAccountActivation(userId, isActivated)
+            // Optimistic update for instantaneous UI feedback
+            _allUsers.value = _allUsers.value.map {
+                if (it.uid == userId) it.copy(isAccountActivated = isActivated) else it
+            }
+            val res = userRepository.toggleAccountActivation(userId, isActivated)
+            res.fold(
+                onSuccess = { onSuccess() },
+                onFailure = { error ->
+                    // Revert optimistic update on failure
+                    _allUsers.value = _allUsers.value.map {
+                        if (it.uid == userId) it.copy(isAccountActivated = !isActivated) else it
+                    }
+                    onError(error.localizedMessage ?: "حدث خطأ أثناء تحديث حالة الحساب")
+                }
+            )
         }
     }
 

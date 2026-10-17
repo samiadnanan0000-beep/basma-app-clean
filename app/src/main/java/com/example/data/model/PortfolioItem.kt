@@ -9,6 +9,14 @@ data class PortfolioItem(
     val title: String = "",
     val description: String = "",
     val imageUrl: String = "",
+    val portfolioUrl: String = "",
     val designerName: String = "",
     val createdAt: Long = System.currentTimeMillis()
-)
+) {
+    val effectiveImageUrl: String
+        get() = imageUrl.ifBlank { portfolioUrl }
+
+    val isWebUrl: Boolean
+        get() = effectiveImageUrl.startsWith("http://", ignoreCase = true) ||
+                effectiveImageUrl.startsWith("https://", ignoreCase = true)
+}

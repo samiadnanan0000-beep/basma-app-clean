@@ -349,11 +349,13 @@ class UserRepository(private val context: Context) {
         }
     }
 
-    suspend fun toggleAccountActivation(targetUid: String, isActivated: Boolean) {
-        try {
+    suspend fun toggleAccountActivation(targetUid: String, isActivated: Boolean): Result<Unit> {
+        return try {
             usersRef.document(targetUid).update("isAccountActivated", isActivated).await()
+            Result.success(Unit)
         } catch (e: Exception) {
             handleFirestoreError(e, OperationType.UPDATE, "users/$targetUid")
+            Result.failure(e)
         }
     }
 

@@ -3,10 +3,18 @@ package com.example.ui.navigation
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddCircle
@@ -19,6 +27,9 @@ import androidx.compose.material.icons.filled.DesignServices
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
@@ -27,6 +38,7 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -35,10 +47,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.repository.UserRepository
@@ -226,43 +240,103 @@ fun AppNavigation(
             }
         }
     ) { innerPadding ->
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            when (currentScreen) {
-                Screen.HOME -> ClientHomeScreen(
-                    mainViewModel = mainViewModel,
-                    onNavigateToNewOrder = { currentScreen = Screen.NEW_ORDER },
-                    onNavigateToNotifications = { currentScreen = Screen.NOTIFICATIONS },
-                    onNavigateToComplaints = { currentScreen = Screen.COMPLAINTS },
-                    onNavigateToPortfolio = { currentScreen = Screen.PORTFOLIO }
-                )
-                Screen.NEW_ORDER -> NewOrderScreen(
-                    mainViewModel = mainViewModel,
-                    orderViewModel = orderViewModel,
-                    onOrderSubmitted = { currentScreen = Screen.MY_ORDERS }
-                )
-                Screen.MY_ORDERS -> OrderTrackingScreen(
-                    orderViewModel = orderViewModel,
-                    onNavigateToNewOrder = { currentScreen = Screen.NEW_ORDER }
-                )
-                Screen.NOTIFICATIONS -> NotificationsCenterScreen(
-                    mainViewModel = mainViewModel
-                )
-                Screen.COMPLAINTS -> ComplaintsScreen(
-                    mainViewModel = mainViewModel
-                )
-                Screen.DESIGNER_HUB -> DesignerHubScreen(
-                    mainViewModel = mainViewModel,
-                    orderViewModel = orderViewModel,
-                    onNavigateToPortfolio = { currentScreen = Screen.PORTFOLIO }
-                )
-                Screen.ADMIN_DASHBOARD -> AdminDashboardScreen(
-                    mainViewModel = mainViewModel,
-                    orderViewModel = orderViewModel
-                )
+            // Persistent Floating Top Bar for Admin Preview as Client Mode
+            if (isPreviewingAsClient) {
+                Surface(
+                    color = Color(0xFFEA580C),
+                    shadowElevation = 4.dp,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("admin_preview_client_banner")
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Visibility,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "أنت الآن في وضع معاينة العميل",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp
+                            )
+                        }
+
+                        Button(
+                            onClick = {
+                                mainViewModel.exitClientPreview()
+                                currentScreen = Screen.ADMIN_DASHBOARD
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.White),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            modifier = Modifier
+                                .height(32.dp)
+                                .testTag("return_to_admin_button")
+                        ) {
+                            Text(
+                                text = "العودة للوحة الإدارة",
+                                color = Color(0xFFEA580C),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+
+            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                when (currentScreen) {
+                    Screen.HOME -> ClientHomeScreen(
+                        mainViewModel = mainViewModel,
+                        onNavigateToNewOrder = { currentScreen = Screen.NEW_ORDER },
+                        onNavigateToNotifications = { currentScreen = Screen.NOTIFICATIONS },
+                        onNavigateToComplaints = { currentScreen = Screen.COMPLAINTS },
+                        onNavigateToPortfolio = { currentScreen = Screen.PORTFOLIO }
+                    )
+                    Screen.NEW_ORDER -> NewOrderScreen(
+                        mainViewModel = mainViewModel,
+                        orderViewModel = orderViewModel,
+                        onOrderSubmitted = { currentScreen = Screen.MY_ORDERS }
+                    )
+                    Screen.MY_ORDERS -> OrderTrackingScreen(
+                        orderViewModel = orderViewModel,
+                        onNavigateToNewOrder = { currentScreen = Screen.NEW_ORDER }
+                    )
+                    Screen.NOTIFICATIONS -> NotificationsCenterScreen(
+                        mainViewModel = mainViewModel
+                    )
+                    Screen.COMPLAINTS -> ComplaintsScreen(
+                        mainViewModel = mainViewModel
+                    )
+                    Screen.DESIGNER_HUB -> DesignerHubScreen(
+                        mainViewModel = mainViewModel,
+                        orderViewModel = orderViewModel,
+                        onNavigateToPortfolio = { currentScreen = Screen.PORTFOLIO }
+                    )
+                    Screen.ADMIN_DASHBOARD -> AdminDashboardScreen(
+                        mainViewModel = mainViewModel,
+                        orderViewModel = orderViewModel,
+                        onNavigateToClientView = { currentScreen = Screen.HOME }
+                    )
                 Screen.CALCULATOR -> SignageCalculatorScreen(
                     calculatorViewModel = calculatorViewModel
                 )
@@ -283,4 +357,5 @@ fun AppNavigation(
             }
         }
     }
+}
 }

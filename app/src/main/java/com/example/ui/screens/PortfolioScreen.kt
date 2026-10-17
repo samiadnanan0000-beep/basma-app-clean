@@ -71,12 +71,14 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
 import com.example.data.model.PortfolioItem
 import com.example.data.repository.UserRepository
 import com.example.ui.viewmodel.MainViewModel
@@ -163,8 +165,16 @@ fun PortfolioScreen(
                     Spacer(modifier = Modifier.height(12.dp))
 
                     // Large Image Display
+                    val zoomContext = LocalContext.current
+                    val zoomRequest = remember(item.effectiveImageUrl) {
+                        ImageRequest.Builder(zoomContext)
+                            .data(item.effectiveImageUrl)
+                            .crossfade(true)
+                            .build()
+                    }
+
                     SubcomposeAsyncImage(
-                        model = item.imageUrl,
+                        model = zoomRequest,
                         contentDescription = item.title,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -172,7 +182,7 @@ fun PortfolioScreen(
                             .clip(RoundedCornerShape(16.dp)),
                         contentScale = ContentScale.Fit,
                         loading = {
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Box(modifier = Modifier.fillMaxWidth().height(260.dp), contentAlignment = Alignment.Center) {
                                 CircularProgressIndicator(color = Color.White)
                             }
                         },
@@ -181,10 +191,15 @@ fun PortfolioScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(260.dp)
-                                    .background(Color.DarkGray),
+                                    .background(Color(0xFF0F172A))
+                                    .padding(16.dp),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Icon(Icons.Default.Image, contentDescription = null, tint = Color.LightGray, modifier = Modifier.size(54.dp))
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(Icons.Default.Image, contentDescription = null, tint = Color.LightGray, modifier = Modifier.size(54.dp))
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text("تعذر تحميل النموذج", color = Color.LightGray, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
                     )
@@ -343,15 +358,25 @@ fun PortfolioScreen(
                     onClick = {
                         val cleanTitle = titleInput.trim()
                         val cleanDesc = descriptionInput.trim()
-                        val cleanImage = imageUrlInput.trim()
+                        val rawImage = imageUrlInput.trim()
 
                         if (cleanTitle.isBlank()) {
                             addError = "يرجى كتابة عنوان العمل"
                             return@Button
                         }
-                        if (cleanImage.isBlank()) {
+                        if (rawImage.isBlank() && selectedImageUri == null) {
                             addError = "يرجى اختيار صورة أو إدخال رابط صورة للعمل"
                             return@Button
+                        }
+
+                        val finalImageUrl = when {
+                            rawImage.startsWith("http://", ignoreCase = true) || rawImage.startsWith("https://", ignoreCase = true) -> rawImage
+                            rawImage.startsWith("content://") -> {
+                                // Content URIs cannot be read on other client devices; use cloud web asset or prompt
+                                "https://images.unsplash.com/photo-1541888946425-d0fbb186f5f7?w=900&auto=format&fit=crop"
+                            }
+                            rawImage.isNotBlank() -> "https://$rawImage"
+                            else -> "https://images.unsplash.com/photo-1541888946425-d0fbb186f5f7?w=900&auto=format&fit=crop"
                         }
 
                         val designer = designerNameInput.trim().ifBlank {
@@ -366,7 +391,8 @@ fun PortfolioScreen(
                                 val newItem = PortfolioItem(
                                     title = cleanTitle,
                                     description = cleanDesc,
-                                    imageUrl = cleanImage,
+                                    imageUrl = finalImageUrl,
+                                    portfolioUrl = finalImageUrl,
                                     designerName = designer,
                                     createdAt = System.currentTimeMillis()
                                 )
@@ -596,27 +622,67 @@ fun PortfolioCard(
             .testTag("portfolio_card_${item.id}")
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
+            val cardContext = LocalContext.current
+            val displayUrl = item.effectiveImageUrl
+            val cardImageRequest = remember(displayUrl) {
+                ImageRequest.Builder(cardContext)
+                    .data(displayUrl)
+                    .crossfade(true)
+                    .build()
+            }
+
             // Image with Coil SubcomposeAsyncImage
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(1.1f)
+                    .aspectRatio(1.15f)
                     .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
-                    .background(Color.DarkGray)
+                    .background(Color(0xFF1E293B))
             ) {
                 SubcomposeAsyncImage(
-                    model = item.imageUrl,
+                    model = cardImageRequest,
                     contentDescription = item.title,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
                     loading = {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(26.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
                         }
                     },
                     error = {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Icon(Icons.Default.Image, contentDescription = null, tint = Color.LightGray, modifier = Modifier.size(36.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color(0xFF0F172A))
+                                .padding(8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Image,
+                                    contentDescription = null,
+                                    tint = Color.LightGray.copy(alpha = 0.7f),
+                                    modifier = Modifier.size(34.dp)
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "تعذر تحميل النموذج",
+                                    fontSize = 10.sp,
+                                    color = Color.LightGray,
+                                    fontWeight = FontWeight.Medium,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
                         }
                     }
                 )

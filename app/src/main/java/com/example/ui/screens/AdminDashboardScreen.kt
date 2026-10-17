@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.PriceCheck
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -90,7 +91,8 @@ import com.example.ui.viewmodel.OrderViewModel
 @Composable
 fun AdminDashboardScreen(
     mainViewModel: MainViewModel,
-    orderViewModel: OrderViewModel
+    orderViewModel: OrderViewModel,
+    onNavigateToClientView: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val allUsers by mainViewModel.allUsers.collectAsState()
@@ -121,7 +123,7 @@ fun AdminDashboardScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // Admin Top Banner
+        // Admin Top Banner with Preview as Client button
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -130,22 +132,48 @@ fun AdminDashboardScreen(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary)
         ) {
             Row(
-                modifier = Modifier.padding(14.dp),
-                verticalAlignment = Alignment.CenterVertically
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(42.dp)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.2f)),
-                    contentAlignment = Alignment.Center
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Default.AdminPanelSettings, contentDescription = null, tint = Color.White)
+                    Box(
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.2f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.AdminPanelSettings, contentDescription = null, tint = Color.White)
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text("لوحة إدارة المنصة • المدير سامي البكري", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Text("إدارة الأسعار المعتمدة، الحوالات، وتوزيع المهام", color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp)
+                    }
                 }
-                Spacer(modifier = Modifier.width(12.dp))
-                Column {
-                    Text("لوحة إدارة المنصة • المدير سامي البكري", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                    Text("إدارة الأسعار المعتمدة، الحوالات، وتوزيع المهام", color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp)
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                // Switch to Client View Mode Button
+                Button(
+                    onClick = {
+                        mainViewModel.toggleClientPreview()
+                        onNavigateToClientView()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEA580C)),
+                    shape = RoundedCornerShape(10.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                    modifier = Modifier.testTag("admin_preview_as_client_button")
+                ) {
+                    Icon(Icons.Default.Visibility, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("معاينة كعميل", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -190,7 +218,18 @@ fun AdminDashboardScreen(
                 2 -> AdminUsersManagementTab(
                     allUsers = allUsers,
                     designerRequests = designerRequests,
-                    onToggleActivation = { uid, act -> mainViewModel.toggleAccountActivation(uid, act) },
+                    onToggleActivation = { uid, act ->
+                        mainViewModel.toggleAccountActivation(
+                            userId = uid,
+                            isActivated = act,
+                            onSuccess = {
+                                Toast.makeText(context, "تم تحديث حالة تفعيل الحساب بنجاح", Toast.LENGTH_SHORT).show()
+                            },
+                            onError = { err ->
+                                Toast.makeText(context, "فشل تحديث حالة الحساب: $err", Toast.LENGTH_LONG).show()
+                            }
+                        )
+                    },
                     onUpdateRole = { uid, role -> mainViewModel.updateUserRole(uid, role) },
                     onApproveDesigner = { reqId, uid -> mainViewModel.approveDesignerUpgrade(reqId, uid) }
                 )

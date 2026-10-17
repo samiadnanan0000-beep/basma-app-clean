@@ -82,7 +82,13 @@ class PortfolioRepository(context: Context) {
                 }
                 if (snapshot != null && !snapshot.isEmpty) {
                     val list = snapshot.documents.mapNotNull { doc ->
-                        doc.toObject(PortfolioItem::class.java)?.copy(id = doc.id)
+                        val p = doc.toObject(PortfolioItem::class.java)
+                        val fallbackUrl = doc.getString("imageUrl") ?: doc.getString("portfolioUrl") ?: ""
+                        p?.copy(
+                            id = doc.id,
+                            imageUrl = if (p.imageUrl.isNotBlank()) p.imageUrl else fallbackUrl,
+                            portfolioUrl = if (p.portfolioUrl.isNotBlank()) p.portfolioUrl else fallbackUrl
+                        )
                     }
                     if (list.isNotEmpty()) {
                         _portfolioState.value = list
@@ -104,7 +110,8 @@ class PortfolioRepository(context: Context) {
      */
     suspend fun addPortfolioItem(item: PortfolioItem): Boolean {
         val uniqueId = if (item.id.isNotBlank()) item.id else "port_${UUID.randomUUID().toString().take(8)}"
-        val itemWithId = item.copy(id = uniqueId)
+        val finalUrl = item.effectiveImageUrl
+        val itemWithId = item.copy(id = uniqueId, imageUrl = finalUrl, portfolioUrl = finalUrl)
 
         // Instant local update
         _portfolioState.value = listOf(itemWithId) + _portfolioState.value.filter { it.id != uniqueId }
@@ -113,7 +120,8 @@ class PortfolioRepository(context: Context) {
             val payload = hashMapOf(
                 "title" to itemWithId.title,
                 "description" to itemWithId.description,
-                "imageUrl" to itemWithId.imageUrl,
+                "imageUrl" to finalUrl,
+                "portfolioUrl" to finalUrl,
                 "designerName" to itemWithId.designerName,
                 "createdAt" to itemWithId.createdAt
             )
