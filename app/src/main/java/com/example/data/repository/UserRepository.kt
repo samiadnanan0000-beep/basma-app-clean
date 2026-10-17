@@ -14,6 +14,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -351,7 +352,10 @@ class UserRepository(private val context: Context) {
 
     suspend fun toggleAccountActivation(targetUid: String, isActivated: Boolean): Result<Unit> {
         return try {
-            usersRef.document(targetUid).update("isAccountActivated", isActivated).await()
+            usersRef.document(targetUid).set(
+                mapOf("isAccountActivated" to isActivated),
+                SetOptions.merge()
+            ).await()
             Result.success(Unit)
         } catch (e: Exception) {
             handleFirestoreError(e, OperationType.UPDATE, "users/$targetUid")

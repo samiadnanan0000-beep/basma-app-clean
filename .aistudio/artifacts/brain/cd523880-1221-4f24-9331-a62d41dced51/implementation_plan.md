@@ -1,224 +1,38 @@
-# خطة التطوير الشاملة لمنصة "بَصْمَة" (Basma Advertising & Production Platform)
+# خطة معالجة وتحديث شارة تفعيل الحساب اللحظية (Real-time Account Activation)
 
-تحديث شامل ومحكم لمنصة "بصمة" يركز على تفعيل الحسابات بالجمع بين التحقق البريدي ورابط واتساب المباشر، إتاحة وضع التصفح الحر لجميع الزوار، دورة تشغيلية ومالية متكاملة للطلبات تفصل أتعاب التصميم عن تكاليف الإنتاج والطباعة، سداد 70% مقدم و30% ختامي بمحافظ إلكترونية موحدة، عزل صلاحيات المصممين وحماية بيانات العملاء، استبدال حاسبة الإدارة بآلة حاسبة قياسية، ونظام محادثات وإشعارات وتحديثات سحابية آمنة.
-
----
-
-## مراجعة المستخدم والقرارات المحسومة (User Review & Critical Decisions)
-
-> [!IMPORTANT]
-> تم تأكيد الخيارات التصميمية والمالية التالية:
-> 1. **فصل مسار التسعير المالي**:
->    - عند تسعير الطلب، يحدد المدير قيمتين منفصلتين:
->      1. **أتعاب التصميم (`designAmount`)**: أجر العمل الإبداعي والفني.
->      2. **تكاليف التنفيذ والمواد (`productionAmount`)**: تكلفة الطباعة، الخامات، واللوحات (تُترك 0 للتصاميم الرقمية).
->      3. **الإجمالي المحسوب للعميل**: `totalAmount = designAmount + productionAmount`.
-> 2. **آلية استقطاع عمولة المنصة ومستحقات المصمم**:
->    - عمولة المنصة تُخصم **حصراً من أتعاب التصميم (`designAmount`)** بنسبة مئوية قابلة للتعديل من إعدادات الإدارة (افتراضياً 20%).
->    - مستحقات المصمم الصافية: `designerFee = designAmount * (1 - عمولة_المنصة)`.
->    - تكاليف المواد والتنفيذ (`productionAmount`) تؤول كاملة 100% للمنصة (الورشة ومواد الإنتاج)، ولا نصيب للمصمم فيها.
-> 3. **عزل الشفافية وحماية البيانات لدى المصمم**:
->    - واجهة المصمم تعرض له فقط المواصفات الفنية ومستحقاته من التصميم فقط (`designerFee`).
->    - حجب تكاليف المواد والطباعة (`productionAmount`) وإجمالي ما دفعه العميل (`totalAmount`) وبيانات العميل الشخصية تماماً عن المصمم.
-> 4. **آلية تفعيل الحسابات**: الجمع بين رابط تفعيل البريد الإلكتروني التلقائي من Firebase ورسالة الواتساب الرسمية المباشرة مع الإدارة لتفعيل الصلاحية (`isAccountActivated`).
-> 5. **تخزين إشعارات الدفع**: رفع الصور إلى Firebase Storage وتوليد روابط سحابية دائمة تُحفظ في Firestore مع دعم المعاينة والتنزيل المحلي.
+تهدف هذه الخطة إلى المعالجة الجذرية لعدم ظهور وتحديث شارة توثيق الحساب (`isAccountActivated`) فور تفعيل الحساب من قِبل الإدارة، لضمان استجابة وانعكاس فوري على واجهات المستخدم دون الحاجة لإعادة التشغيل أو تسجيل الخروج.
 
 ---
 
-## 1. نظرة عامة والمفهوم الأساسي (Overview & Core Concept)
-
-- **طبيعة المنصة**: منصة متخصصة لإنتاج وإدارة أعمال الدعاية والإعلان والطباعة الرقمية واللوحات الإعلانية في اليمن.
-- **الفئات المستهدفة**:
-  - **العملاء (Clients)**: تصفح الأعمال والخدمات، تقديم طلبات بمواصفات نصية مرنة، تلقي تسعيرة الإدارة الإجمالية، سداد الدفعة المقدمة (70%) والمتبقية (30%) عبر المحافظ اليمنية (جيب، جوالي، ون كاش)، واستلام التصاميم واعتمادها.
-  - **المصممون (Designers)**: استلام الطلبات المسندة بالمواصفات الفنية المكتوبة ومستحقات التصميم الصافية دون الاطلاع على تكاليف المواد أو بيانات العميل، قبول أو الاعتذار عن الطلب، وإدارة المحفظة المستقلة.
-  - **المدير العام (سامي البكري - Super Admin)**: تسعير شقي الطلب (التصميم والإنتاج)، تحديد نسبة عمولة التصميم وتعديلها من الإعدادات، تأكيد استلام الحوالات، إسناد المهام للمصممين المتفرغين، صندوق الشكاوى، إرسال الإشعارات، وفحص التحديثات.
+## 1. تصحيح نموذج بيانات المستخدم (`UserProfile` في `Models.kt`)
+- **المشكلة البرمجية:** محول Firebase Firestore في بيئة Java/Kotlin يقوم بحذف بادئة `is` تلقائياً من أسماء الخصائص المنطقية (Booleans) وفقاً لمعايير JavaBeans (تحويل `isAccountActivated` إلى `accountActivated`)، مما يؤدي إلى عدم مطابقة الحقل المخزن في Firestore (`isAccountActivated`) وسقوط قيمته إلى `false`.
+- **الحل المقترح:**
+  - إضافة التوجيهات الصريحة `@get:PropertyName("isAccountActivated")` و `@set:PropertyName("isAccountActivated")` على المتغير `var isAccountActivated: Boolean = false` داخل كلاس `UserProfile`.
+  - استيراد `com.google.firebase.firestore.PropertyName`.
 
 ---
 
-## 2. تجربة المستخدم والتصميم البصري (User Experience & Visual Design)
-
-### أ) المسارات التشغيلية والمالية الرئيسية (Key User Flows)
-
-```
-[تسجيل حساب / دخول] ──> [تصفح حر للمعرض والخدمات]
-                             │
-                             ▼ (عند طلب خدمة جديدة)
-                     [فحص تفعيل الحساب]
-                    ┌────────┴────────┐
-           [مفعل: جاهز]        [غير مفعل] ──> [نافذة تفعيل واتساب المباشر]
-                │
-                ▼
-      [شاشة إنشاء الطلب المرنة]
-      (عنوان ونوع التصميم + مواصفات نصية موسعة + أبعاد ومرفقات)
-                │
-                ▼ (حفظ برقم تسلسلي #BSM-XXXX)
-      [PENDING_PRICING: بانتظار تسعير الإدارة]
-                │
-                ▼ (المدير يحدد: أتعاب التصميم + تكاليف المواد)
-      [PRICE_OFFERED: عرض السعر للعميل]
-      (إجمالي التكلفة + 70% مقدم + 30% عند التسليم)
-                │
-                ▼ (موافقة العميل)
-      [WAITING_FOR_ADVANCE: سداد الـ 70%]
-      (اختيار محفظة: جيب/جوالي/ون كاش + بيانات سامي البكري 771051177 + إرفاق إشعار)
-                │
-                ▼ (المدير يعتمد التحويل ويحدد موعد التسليم)
-      [WAITING_FOR_ASSIGNMENT: إسناد لمصمم متفرغ]
-                │ (المصمم يرى فقط: المواصفات الفنية + أتعابه الصافية)
-                ▼
-      [IN_PROGRESS: تنفيذ التصميم + شات نصي مراقب]
-                │
-                ▼ (مراجعة العينة عبر واتساب الإدارة)
-      [WAITING_FOR_FINAL_PAYMENT: سداد الـ 30% المتبقية]
-                │
-                ▼ (اعتماد الدفعة النهائية)
-      [COMPLETED: تسليم الملفات الأصلية + تقييم الخدمة + قيد مستحقات المصمم]
-```
-
-### ب) الهوية البصرية والمظهر (Visual Identity & Theme)
-- **الألوان المعتمدة**:
-  - الأساسي: أزرق نيلي احترافي (`#0D47A1` / `#1976D2`) يمثل الثقة والاحترافية المطبعية.
-  - الثانوي والتفاعلي: ذهبي أمبر دافئ (`#FFB300` / `#FFA000`) لتمييز الحالات المالية والدفعات.
-  - ألوان الحالات: أخضر زمردي للعمليات المكتملة والمصممين المتفرغين (`#2E7D32`)، وبرتقالي للطلبات قيد المراجعة (`#E65100`).
-- **ثبات المظهر عند تدوير الشاشة**:
-  - حفظ حالة المظهر عبر `rememberSaveable` في `MainActivity` و `Theme.kt`.
-  - إضافة ضبط `android:configChanges` في `AndroidManifest.xml` لمنع إعادة إنشاء الشاشة واضطراب الثيم.
+## 2. تفعيل الاستماع اللحظي لمستند المستخدم (`Real-time Snapshot Listener` في `MainViewModel` و `UserRepository`)
+- التأكد من بقاء مستمع حي دائم (`addSnapshotListener`) موصولاً بمستند المستخدم الحالي `users/{uid}`.
+- توفير دالة مخصصة `listenToUserProfile(userId: String)` في `MainViewModel` تقوم بإلغاء أي مهمة سابقة وبدء استماع فوري لأي تغيير يطرأ على وثيقة المستخدم في Firestore وبثه مباشرة إلى `_userProfile: MutableStateFlow<UserProfile?>`.
+- التأكد من استدعاء `listenToUserProfile(user.uid)` فور تسجيل الدخول أو استعادة الجلسة في `onUserSignedIn` و `signInWithEmailAndPassword` و `registerWithEmail`.
 
 ---
 
-## 3. القرارات التقنية والمنتج (Key Product Decisions)
-
-### القرار 1: الهيكل المالي الثنائي للطلب
-- **المختار**:
-  - عند تسعير الطلب من لوحة الإدارة:
-    1. حقل `designAmount` (أتعاب التصميم).
-    2. حقل `productionAmount` (تكاليف الطباعة والمواد، يُترك 0 للتصاميم الرقمية فقط).
-  - إجمالي التكلفة للعميل: `totalAmount = designAmount + productionAmount`.
-  - الدفعة المقدمة: `advanceAmount = totalAmount * 0.70`.
-  - المتبقي النهائي: `remainingAmount = totalAmount * 0.30`.
-  - عمولة المنصة: تُخصم حصراً من `designAmount` وفق النسبة المحددة في إعدادات المنصة (`platformCommissionPercentage`، افتراضياً 20%).
-  - مستحقات المصمم: `designerFee = designAmount * (1 - platformCommissionPercentage / 100)`.
-  - عائد المنصة الصافي: `platformNetIncome = productionAmount + (designAmount * platformCommissionPercentage / 100)`.
-- **السبب**: ضمان عدم المساس بتكاليف المواد والطباعة التي تتحملها الورشة، واقتصار المشاركة مع المصمم على القيمة الإبداعية الفنية.
-
-### القرار 2: حجب التكاليف الإنتاجية وبيانات العملاء عن المصمم
-- **المختار**: بطاقة الطلب لدى المصمم تعرض حصراً: رقم الطلب #ID، نوع التصميم، المواصفات الفنية، الأبعاد، موعد التسليم، ومستحقاته المالية الصافية (`designerFee`). تُحجب تماماً مبالغ `productionAmount` و `totalAmount` وبيانات العميل الشخصية (الاسم، الهاتف، الإيميل).
-- **السبب**: حماية خصوصية العميل، ومنع تسريب هوامش أرباح وتكاليف الورشة، ومنع التواصل خارج المنصة.
-
-### القرار 3: تفعيل الحسابات بالجمع بين البريد والواتساب
-- **المختار**: إرسال رابط تأكيد البريد في الخلفية لحماية الحساب، وإتاحة التصفح الحر، وتوفير رابط محادثة واتساب مباشر مع المدير سامي البكري لتفعيل صلاحية تقديم الطلبات (`isAccountActivated`).
-- **السبب**: التوازن بين توثيق الهوية وسلاسة تجربة الاستخدام دون حجب الزوار.
-
-### القرار 4: آلة حاسبة قياسية بلوحة الإدارة
-- **المختار**: استبدال حاسبة النسب السابقة بآلة حاسبة رقمية قياسية (+، -، ×، ÷، C، =).
+## 3. التحقق وتحديث شاشات العرض التفاعلية (`UI Recomposition`)
+- في `ClientHomeScreen.kt` و `SettingsScreen.kt` و `ProfileScreen.kt`:
+  - مراقبة `val userProfile by mainViewModel.userProfile.collectAsState()` لحظياً.
+  - استخراج المتغير: `val isActivated = userProfile?.isAccountActivated == true || mainViewModel.isSuperAdmin()`.
+  - التأكد من إظهار أيقونة التوثيق الخضراء/الزرقاء `VerifiedCheckIcon` والشارة المضيئة `ModernVerifiedPillBadge` مباشرة بجوار اسم المستخدم فور تحول القيمة إلى `true`.
 
 ---
 
-## 4. البنية المعمارية واستراتيجية البيانات (Technical Architecture & Data Strategy)
-
-### أ) مخطط تدفق المكونات والبيانات (Component Architecture)
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                       Jetpack Compose UI                    │
-├─────────────────┬───────────────────┬───────────────────────┤
-│   Client Flow   │   Designer Flow   │      Admin Flow       │
-│ • ClientHome    │ • DesignerHub     │ • AdminDashboard      │
-│ • NewOrder      │ • TechnicalSpecs  │ • DualPricingDialog   │
-│ • OrderTracking │ • NetEarningsCard │ • CommissionSettings  │
-│ • PaymentDialog │ • Accept/Reject   │ • LoadBalancingAssign │
-│ • WhatsAppActiv │ • OrderChat       │ • StandardCalculator  │
-│ • FeedbackForm  │ (No Material/PII) │ • BroadcastNotice     │
-└────────┬────────┴─────────┬─────────┴───────────┬───────────┘
-         │                  │                     │
-         ▼                  ▼                     ▼
-┌─────────────────────────────────────────────────────────────┐
-│                 ViewModels & StateFlow Layer                │
-│ • MainViewModel (Auth, Activation, AppConfig, Role Guard)   │
-│ • OrderViewModel (Dual-Pricing, 70/30 Payments, Chat)       │
-│ • PortfolioViewModel & NotificationViewModel                │
-└──────────────────────────────┬──────────────────────────────┘
-                               │
-                               ▼
-┌─────────────────────────────────────────────────────────────┐
-│                      Repository Layer                       │
-│ • UserRepository: Auth, Roles, Activation, WhatsApp Intent  │
-│ • OrderRepository: Orders, 70/30 Payments, Assignments, Chat│
-│ • StorageRepository: Receipts & Portfolio Permanent Uploads │
-│ • FeedbackRepository & NotificationRepository               │
-└──────────────────────────────┬──────────────────────────────┘
-                               │
-                               ▼
-┌─────────────────────────────────────────────────────────────┐
-│                  Cloud Backend (Firebase)                   │
-│ • Firestore: users, orders, settings, feedback, notices     │
-│ • Firebase Storage: receipts/, portfolio/                   │
-│ • Firebase Auth: Secure Email/Pass + Verification Link      │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### ب) نموذج البيانات وتحديثات الحقول (Data Schema Updates)
-
-1. **نموذج الطلب (OrderItem)**:
-   - `orderNumber: String` (مثال: "#BSM-7716").
-   - `designType: String` (عنوان ونوع الطلب المكتوب بحرية).
-   - `detailedSpecs: String` (شروط ومواصفات العميل الفنية).
-   - `designAmount: Double = 0.0` (أتعاب التصميم المحددة من المدير).
-   - `productionAmount: Double = 0.0` (تكاليف الطباعة والمواد والتنفيذ).
-   - `totalAmount: Double = 0.0` (`designAmount + productionAmount`).
-   - `advanceAmount: Double = 0.0` (70% من `totalAmount`).
-   - `remainingAmount: Double = 0.0` (30% من `totalAmount`).
-   - `designerFee: Double = 0.0` (صافي مستحقات المصمم بعد عمولة المنصة من التصميم).
-   - `platformFee: Double = 0.0` (عمولة المنصة من أتعاب التصميم).
-   - `advancePaymentStatus: String`, `finalPaymentStatus: String` (`NONE`, `UNDER_REVIEW`, `APPROVED`, `REJECTED`).
-   - `advanceReceiptUrl: String`, `finalReceiptUrl: String`.
-   - `walletType: String` ("جيب", "جوالي", "ون كاش").
-   - `assignedDesignerId: String?`, `designerName: String?`.
-   - `estimatedDeliveryTime: String?`.
-   - `status: String` (`PENDING_PRICING`, `PRICE_OFFERED`, `WAITING_FOR_ADVANCE`, `WAITING_FOR_ASSIGNMENT`, `PENDING_DESIGNER_ACCEPTANCE`, `IN_PROGRESS`, `WAITING_FOR_FINAL_PAYMENT`, `COMPLETED`, `CANCELLED`).
-   - `clientRating: Float`, `clientReview: String?`.
-   - `rejectionHistory: List<Map<String, Any>>`.
-
-2. **نموذج إعدادات المنصة (app_config)**:
-   - `whatsappNumber: String = "967771051177"`.
-   - `platformCommissionPercentage: Double = 20.0` (نسبة عمولة المنصة من أتعاب التصميم، قابلة للتعديل من شاشة الإعدادات).
+## 4. فحص وضمان إجراء التفعيل في لوحة الإدارة (`Admin Activation Action`)
+- في `UserRepository.kt` داخل دالة `toggleAccountActivation(targetUid: String, isActivated: Boolean)`:
+  - استخدام `usersRef.document(targetUid).set(mapOf("isAccountActivated" to isActivated), SetOptions.merge())` بدلاً من مجرد update لضمان كتابة وتحديث الحقل بدقة متطابقة في Firestore حتى لو لم يكن الحقل موجوداً مسبقاً في الوثيقة.
+  - إطلاق إشعار Toast تأكيدي وفوري في `AdminDashboardScreen.kt`.
 
 ---
 
-## 5. خطة التنفيذ المنهجية (Phase-by-Phase Execution Plan)
-
-### المرحلة 1: استقرار البناء، النماذج، وإصلاح استيرادات Compose
-- إضافة استيراد `fillMaxSize` و `fillMaxWidth` في `AdvancePaymentDialog.kt`.
-- تحديث نماذج البيانات في `Models.kt` لتضمين حقول التسعير المزدوج (`designAmount`, `productionAmount`, `designerFee`) والدفعات 70/30 والترقيم الفريد وحماية البيانات.
-- تحديث `AndroidManifest.xml` لدعم أذونات التخزين وتثبيت المظهر عند تدوير الشاشة.
-
-### المرحلة 2: مسار تفعيل الحسابات وربط واتساب
-- إنشاء `WhatsAppHelper` مع ترميز النصوص بـ UTF-8 ورقم الإدارة الافتراضي (967771051177).
-- ربط فحص التفعيل `isAccountActivated` في تدفق الطلبات مع ظهور نافذة التوجيه للواتساب للعملاء غير المفعلين.
-
-### المرحلة 3: شاشة إنشاء الطلب المرنة ومسار التسعير المزدوج
-- إعادة هيكلة `NewOrderScreen.kt`: إزالة المربعات الثابتة، إضافة الحقول النصية المرنة، وإلغاء احتساب الأسعار المسبق.
-- تعيين الحالة المبدئية `PENDING_PRICING` وتوليد رقم الطلب الفريد `#BSM-XXXX`.
-- إضافة نافذة التسعير المزدوج للمدير في `AdminDashboardScreen.kt`:
-  - حقل `designAmount` وحقل `productionAmount`.
-  - احتساب مستحقات المصمم وعمولة المنصة تلقائياً وتحديث حالة الطلب إلى `PRICE_OFFERED`.
-  - إضافة خيار تعديل نسبة عمولة المنصة في إعدادات الإدارة.
-
-### المرحلة 4: الدورة المالية (70% مقدم + 30% ختامي) ومراجعة الإشعارات
-- تحديث `AdvancePaymentDialog.kt` ومسار الدفع لعرض المحافظ الثلاث وبيانات "سامي عدنان حسن البكري" (771051177).
-- ربط زر النسخ المباشر ورفع صورة الإشعار وتحديث الحالة إلى `UNDER_REVIEW`.
-- إضافة أزرار الاعتماد والرفض وتحديد موعد التسليم في لوحة الإدارة.
-- إضافة مسار سداد الـ 30% النهائي بعد معاينة العينة مع تقييم الخدمة.
-
-### المرحلة 5: عزل صلاحيات المصمم وتوزيع المهام الذكي
-- تحديث `DesignerHubScreen.kt` لعرض المواصفات الفنية ومستحقات التصميم الصافية (`designerFee`) فقط، وحجب `productionAmount` وبيانات العميل الشخصية تماماً.
-- إضافة بطاقة قبول أو الاعتذار عن الطلب مع أسباب الاعتذار وفك الارتباط.
-- فلترة قائمة المصممين في لوحة الإدارة بناءً على التفرغ وتقييم النجوم.
-- إضافة محفظة إحصائية مستقلة للمصمم بأرباحه فقط.
-
-### المرحلة 6: الأدوات التكميلية والنظافة التشغيلية
-- استبدال حاسبة الإدارة بآلة حاسبة قياسية بسيطة (+، -، ×، ÷، C، =).
-- حذف الإشعارات الترحيبية المنبثقة التلقائية عند التسجيل.
-- إضافة صندوق الشكاوى والمقترحات (`ComplaintsScreen.kt`).
-- ربط فاحص التحديثات التلقائي للتطبيق من Firestore ومطابقة `VERSION_CODE`.
-- التحقق النهائي من خلو الكود من أخطاء التجميع عبر `compile_applet`.
+## 5. التحقق والاختبار (Verification)
+- تشغيل `compile_applet` للتأكد من خلو المشروع تماماً من أي أخطاء تجميع أو تعارضات.

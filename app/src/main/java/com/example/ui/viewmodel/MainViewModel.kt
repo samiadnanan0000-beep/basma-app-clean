@@ -17,6 +17,7 @@ import com.example.data.repository.UserRepository
 import com.example.security.BiometricLockManager
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -46,6 +47,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _userProfile = MutableStateFlow<UserProfile?>(null)
     val userProfile: StateFlow<UserProfile?> = _userProfile.asStateFlow()
+    val currentUserProfile: StateFlow<UserProfile?> = _userProfile.asStateFlow()
+
+    private var userProfileJob: Job? = null
+
+    /**
+     * Real-time continuous listener for the current user's profile in Firestore.
+     */
+    fun listenToUserProfile(userId: String) {
+        if (userId.isBlank() || userId.startsWith("guest_") || userId.startsWith("admin_demo")) return
+        userProfileJob?.cancel()
+        userProfileJob = viewModelScope.launch {
+            userRepository.observeUserProfile(userId).collect { updated ->
+                if (updated != null) {
+                    _userProfile.value = updated
+                }
+            }
+        }
+    }
 
     // Preview mode: Allows super_admin or designer to view the app as a client
     private val _previewAsClient = MutableStateFlow(false)
@@ -193,13 +212,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 // Real-time profile updates
-                launch {
-                    userRepository.observeUserProfile(profile.uid).collect { updatedProfile ->
-                        if (updatedProfile != null) {
-                            _userProfile.value = updatedProfile
-                        }
-                    }
-                }
+                listenToUserProfile(profile.uid)
 
                 val isStaff = profile.role.uppercase() in listOf(UserRepository.ROLE_ADMIN, "SUPER_ADMIN", UserRepository.ROLE_DESIGNER)
                 launch {
@@ -248,13 +261,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 biometricLockManager.setAccountSaved(email)
 
                 // Real-time observer
-                launch {
-                    userRepository.observeUserProfile(profile.uid).collect { updated ->
-                        if (updated != null) {
-                            _userProfile.value = updated
-                        }
-                    }
-                }
+                listenToUserProfile(profile.uid)
 
                 val isStaff = profile.role.uppercase() in listOf(UserRepository.ROLE_ADMIN, "SUPER_ADMIN", UserRepository.ROLE_DESIGNER)
                 launch {
@@ -436,13 +443,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val profile = userRepository.syncUserProfile(user, phoneInput)
                 _userProfile.value = profile
 
-                launch {
-                    userRepository.observeUserProfile(user.uid).collect { updated ->
-                        if (updated != null) {
-                            _userProfile.value = updated
-                        }
-                    }
-                }
+                listenToUserProfile(user.uid)
 
                 val isStaff = profile.role.uppercase() in listOf(UserRepository.ROLE_ADMIN, "SUPER_ADMIN", UserRepository.ROLE_DESIGNER)
                 notificationRepository.observeNotificationsForUser(user.uid, isStaff)
@@ -494,6 +495,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _allUsers.value = _allUsers.value.map {
                 if (it.uid == userId) it.copy(isAccountActivated = isActivated) else it
             }
+            if (_userProfile.value?.uid == userId) {
+                _userProfile.value = _userProfile.value?.copy(isAccountActivated = isActivated)
+            }
             val res = userRepository.toggleAccountActivation(userId, isActivated)
             res.fold(
                 onSuccess = { onSuccess() },
@@ -501,6 +505,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     // Revert optimistic update on failure
                     _allUsers.value = _allUsers.value.map {
                         if (it.uid == userId) it.copy(isAccountActivated = !isActivated) else it
+                    }
+                    if (_userProfile.value?.uid == userId) {
+                        _userProfile.value = _userProfile.value?.copy(isAccountActivated = !isActivated)
                     }
                     onError(error.localizedMessage ?: "حدث خطأ أثناء تحديث حالة الحساب")
                 }
@@ -563,6 +570,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         } catch (e: Exception) {
             Log.e("MainViewModel", "SignOut error safeguard: ${e.message}")
         }
+        userProfileJob?.cancel()
+        userProfileJob = null
         _currentUser.value = null
         _userProfile.value = null
         _previewAsClient.value = false

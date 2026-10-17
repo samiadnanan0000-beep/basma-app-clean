@@ -3,6 +3,7 @@ package com.example.data.model
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.DocumentId
 import com.google.firebase.firestore.IgnoreExtraProperties
+import com.google.firebase.firestore.PropertyName
 import com.google.firebase.firestore.ServerTimestamp
 
 @IgnoreExtraProperties
@@ -12,7 +13,9 @@ data class UserProfile(
     val email: String = "",
     val phone: String = "",
     val role: String = "client", // "super_admin" / "admin", "designer", "client"
-    val isAccountActivated: Boolean = false,
+    @get:PropertyName("isAccountActivated")
+    @set:PropertyName("isAccountActivated")
+    var isAccountActivated: Boolean = false,
     val activeTasksCount: Int = 0,
     val ratingAverage: Float = 5.0f,
     val portfolioLink: String = "",
