@@ -70,6 +70,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val hasAccount: StateFlow<Boolean> = biometricLockManager.hasAccountFlow
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
+    private val _appConfig = MutableStateFlow(com.example.data.model.AppConfig())
+    val appConfig: StateFlow<com.example.data.model.AppConfig> = _appConfig.asStateFlow()
+
+    private val _appVersion = MutableStateFlow(com.example.data.model.AppVersionConfig())
+    val appVersion: StateFlow<com.example.data.model.AppVersionConfig> = _appVersion.asStateFlow()
+
+    private val _allUsers = MutableStateFlow<List<UserProfile>>(emptyList())
+    val allUsers: StateFlow<List<UserProfile>> = _allUsers.asStateFlow()
+
+    private val _designerRequests = MutableStateFlow<List<com.example.data.model.DesignerUpgradeRequest>>(emptyList())
+    val designerRequests: StateFlow<List<com.example.data.model.DesignerUpgradeRequest>> = _designerRequests.asStateFlow()
+
     init {
         // Seed initial data if needed
         viewModelScope.launch {
@@ -93,6 +105,38 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             } catch (e: Exception) {
                 Log.e("MainViewModel", "Biometric flow observation error: ${e.message}")
+            }
+        }
+
+        viewModelScope.launch {
+            runCatching {
+                userRepository.observeAppConfig().collect { cfg ->
+                    _appConfig.value = cfg
+                }
+            }
+        }
+
+        viewModelScope.launch {
+            runCatching {
+                userRepository.observeAppVersion().collect { ver ->
+                    _appVersion.value = ver
+                }
+            }
+        }
+
+        viewModelScope.launch {
+            runCatching {
+                userRepository.observeAllUsers().collect { list ->
+                    _allUsers.value = list
+                }
+            }
+        }
+
+        viewModelScope.launch {
+            runCatching {
+                userRepository.observeDesignerUpgradeRequests().collect { list ->
+                    _designerRequests.value = list
+                }
             }
         }
 
@@ -434,6 +478,52 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun isDesigner(): Boolean {
         val role = _userProfile.value?.role?.uppercase()
         return role == UserRepository.ROLE_DESIGNER
+    }
+
+    fun toggleAccountActivation(userId: String, isActivated: Boolean) {
+        viewModelScope.launch {
+            userRepository.toggleAccountActivation(userId, isActivated)
+        }
+    }
+
+    fun updateAppConfig(config: com.example.data.model.AppConfig, onDone: () -> Unit = {}) {
+        viewModelScope.launch {
+            userRepository.updateAppConfig(config)
+            onDone()
+        }
+    }
+
+    fun submitDesignerUpgrade(
+        experience: String,
+        portfolio: String,
+        notes: String,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        val user = _userProfile.value ?: run {
+            onError("يرجى تسجيل الدخول أولاً")
+            return
+        }
+        viewModelScope.launch {
+            val req = com.example.data.model.DesignerUpgradeRequest(
+                userId = user.uid,
+                userName = user.name,
+                userPhone = user.phone,
+                userEmail = user.email,
+                experienceAreas = experience,
+                portfolioUrl = portfolio,
+                notes = notes
+            )
+            val ok = userRepository.submitDesignerUpgradeRequest(req)
+            if (ok) onSuccess() else onError("تعذر إرسال الطلب، يرجى المحاولة لاحقاً")
+        }
+    }
+
+    fun approveDesignerUpgrade(requestId: String, targetUserId: String, onSuccess: () -> Unit = {}) {
+        viewModelScope.launch {
+            userRepository.approveDesignerUpgrade(requestId, targetUserId)
+            onSuccess()
+        }
     }
 
     fun signOut(onComplete: () -> Unit) {

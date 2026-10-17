@@ -1,17 +1,15 @@
 package com.example.ui.screens
 
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -27,26 +25,25 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddPhotoAlternate
-import androidx.compose.material.icons.filled.Business
-import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.ColorLens
-import androidx.compose.material.icons.filled.ContactPhone
-import androidx.compose.material.icons.filled.CropSquare
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Title
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -60,212 +57,221 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.data.model.OrderItem
 import com.example.ui.viewmodel.MainViewModel
 import com.example.ui.viewmodel.OrderViewModel
+import com.example.util.WhatsAppHelper
 
-@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun NewOrderScreen(
     mainViewModel: MainViewModel,
     orderViewModel: OrderViewModel,
     onOrderSubmitted: () -> Unit
 ) {
+    val context = LocalContext.current
     val userProfile by mainViewModel.userProfile.collectAsState()
-    val materials by orderViewModel.materials.collectAsState()
     val isSubmitting by orderViewModel.isSubmitting.collectAsState()
+    val appConfig by mainViewModel.appConfig.collectAsState()
 
-    val categories = listOf(
-        "كلادنج وفلكس",
-        "حروف اكريليك مضيئة",
-        "بنرات واستكرات",
-        "هوية بصرية وشعارات",
-        "مطبوعات ورقية"
-    )
+    // 1. Flexible text fields
+    var designTypeInput by remember { mutableStateOf("") }
+    var detailedSpecsInput by remember { mutableStateOf("") }
+    var widthInput by remember { mutableStateOf("") }
+    var heightInput by remember { mutableStateOf("") }
+    var contactPhoneInput by remember { mutableStateOf(userProfile?.phone.orEmpty()) }
+    var referenceAttachmentUrl by remember { mutableStateOf("") }
+    var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
 
-    var selectedCategory by remember { mutableStateOf(categories[0]) }
-    var selectedMaterialId by remember { mutableStateOf("") }
-    var selectedMaterialName by remember { mutableStateOf("") }
-    var materialDropdownExpanded by remember { mutableStateOf(false) }
-
-    var widthInput by remember { mutableStateOf("3.0") }
-    var heightInput by remember { mutableStateOf("1.2") }
-
-    var brandText by remember { mutableStateOf("") }
-    var contactDetails by remember { mutableStateOf("") }
-    var colorNotes by remember { mutableStateOf("") }
-
-    var logoUri by remember { mutableStateOf<Uri?>(null) }
-    var sitePhotoUri by remember { mutableStateOf<Uri?>(null) }
-
+    var showActivationDialog by remember { mutableStateOf(false) }
+    var showSuccessDialog by remember { mutableStateOf(false) }
+    var generatedOrderNum by remember { mutableStateOf("") }
     var validationError by remember { mutableStateOf<String?>(null) }
 
-    val logoPicker = rememberLauncherForActivityResult(
+    val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
-    ) { uri -> logoUri = uri }
+    ) { uri: Uri? ->
+        if (uri != null) {
+            selectedImageUri = uri
+            referenceAttachmentUrl = uri.toString()
+        }
+    }
 
-    val sitePhotoPicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
-    ) { uri -> sitePhotoUri = uri }
-
-    val width = widthInput.toDoubleOrNull() ?: 0.0
-    val height = heightInput.toDoubleOrNull() ?: 0.0
-    val area = (width * height)
+    val finalAttachment = referenceAttachmentUrl.ifBlank { selectedImageUri?.toString().orEmpty() }
 
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
             .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-        contentPadding = PaddingValues(top = 16.dp, bottom = 100.dp)
+        contentPadding = PaddingValues(top = 16.dp, bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        item {
-            Text(
-                text = "طلب عمل وتصميم جديد ✨",
-                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onBackground
-            )
-            Text(
-                text = "أدخل تفاصيل ومقاسات اللوحة أو المطبوعات لتلقي التسعير والبروفة",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
-            )
-        }
-
-        // Category Picker Chips
+        // Header Card
         item {
             Card(
-                shape = RoundedCornerShape(22.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                )
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "1. نوع العمل المطلوب",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(46.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary),
+                        contentAlignment = Alignment.Center
                     ) {
-                        for (category in categories) {
-                            val isSelected = selectedCategory == category
-                            FilterChip(
-                                selected = isSelected,
-                                onClick = { selectedCategory = category },
-                                label = { Text(category, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
-                                leadingIcon = if (isSelected) {
-                                    { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                                } else null,
-                                shape = RoundedCornerShape(14.dp),
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                    selectedLabelColor = Color.White
-                                )
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // Dynamic Materials Picker (From Firestore)
-        item {
-            Card(
-                shape = RoundedCornerShape(22.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "2. الخامة ومواد التصنيع",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    ExposedDropdownMenuBox(
-                        expanded = materialDropdownExpanded,
-                        onExpandedChange = { materialDropdownExpanded = it }
-                    ) {
-                        OutlinedTextField(
-                            value = if (selectedMaterialName.isNotBlank()) selectedMaterialName else "اختر نوع الخامة (أو اتركها لترشيح المصمم)",
-                            onValueChange = {},
-                            readOnly = true,
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = materialDropdownExpanded) },
-                            modifier = Modifier
-                                .menuAnchor()
-                                .fillMaxWidth(),
-                            shape = RoundedCornerShape(16.dp)
+                        Icon(
+                            imageVector = Icons.Default.Description,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp)
                         )
-                        ExposedDropdownMenu(
-                            expanded = materialDropdownExpanded,
-                            onDismissRequest = { materialDropdownExpanded = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("ترشيح أفضل خامة بمعرفة مصمم الاستوديو") },
-                                onClick = {
-                                    selectedMaterialId = ""
-                                    selectedMaterialName = "ترشيح المصمم"
-                                    materialDropdownExpanded = false
-                                }
-                            )
-                            materials.forEach { mat ->
-                                DropdownMenuItem(
-                                    text = { Text("${mat.name} (${mat.pricePerUnit} ${mat.currency}/${mat.unitType})") },
-                                    onClick = {
-                                        selectedMaterialId = mat.id
-                                        selectedMaterialName = mat.name
-                                        materialDropdownExpanded = false
-                                    }
-                                )
-                            }
-                        }
                     }
-                }
-            }
-        }
-
-        // Dimensions (Width × Height) with live Area Display
-        item {
-            Card(
-                shape = RoundedCornerShape(22.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    Spacer(modifier = Modifier.width(14.dp))
+                    Column {
                         Text(
-                            text = "3. أبعاد ومقاسات العمل",
+                            text = "طلب تصميم وعمل جديد",
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        if (area > 0) {
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(MaterialTheme.colorScheme.primaryContainer)
-                                    .padding(horizontal = 10.dp, vertical = 4.dp)
-                            ) {
-                                Text(
-                                    text = "المساحة: ${"%.2f".format(area)} م²",
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp
-                                )
-                            }
-                        }
+                        Text(
+                            text = "اكتب تفاصيل طلبك بحرية لتصلك التسعيرة المعتمدة من الإدارة",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
                     }
+                }
+            }
+        }
+
+        // Section 1: Design Type & Title (Flexible Text)
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.Title,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "عنوان / نوع التصميم المطلوب *",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = designTypeInput,
+                        onValueChange = {
+                            designTypeInput = it
+                            validationError = null
+                        },
+                        placeholder = { Text("مثال: تصميم هوية بصرية كاملة، لوحة واجهة محل كلادنج، بنر سوشيال ميديا...") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("design_type_input")
+                    )
+                }
+            }
+        }
+
+        // Section 2: Detailed Specifications (Multi-line)
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.Description,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "مواصفات وتفاصيل التصميم المطلوب *",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "اكتب هنا كافة المتطلبات والشروط الفنية، النصوص المكتوبة، الألوان المفضلة، ونوع النشاط بدقة.",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = detailedSpecsInput,
+                        onValueChange = {
+                            detailedSpecsInput = it
+                            validationError = null
+                        },
+                        placeholder = { Text("اكتب تفاصيل طلبك هنا بالكامل...") },
+                        minLines = 4,
+                        maxLines = 10,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("detailed_specs_input")
+                    )
+                }
+            }
+        }
+
+        // Section 3: Dimensions & Contact (Optional Complementary Fields)
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.AspectRatio,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "الأبعاد والمقاسات التقديرية (اختياري)",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                    }
+
                     Spacer(modifier = Modifier.height(10.dp))
 
                     Row(
@@ -275,153 +281,124 @@ fun NewOrderScreen(
                         OutlinedTextField(
                             value = widthInput,
                             onValueChange = { widthInput = it },
-                            label = { Text("العرض (بالمتر)") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                            shape = RoundedCornerShape(16.dp),
-                            modifier = Modifier
-                                .weight(1f)
-                                .testTag("width_input")
+                            label = { Text("العرض (متر)") },
+                            placeholder = { Text("مثال: 3.0") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f)
                         )
+
                         OutlinedTextField(
                             value = heightInput,
                             onValueChange = { heightInput = it },
-                            label = { Text("الارتفاع (بالمتر)") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                            shape = RoundedCornerShape(16.dp),
-                            modifier = Modifier
-                                .weight(1f)
-                                .testTag("height_input")
+                            label = { Text("الارتفاع (متر)") },
+                            placeholder = { Text("مثال: 1.5") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f)
                         )
                     }
-                }
-            }
-        }
 
-        // Text & Content Details
-        item {
-            Card(
-                shape = RoundedCornerShape(22.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "4. محتوى ونص التصميم",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
-                    OutlinedTextField(
-                        value = brandText,
-                        onValueChange = { brandText = it },
-                        label = { Text("الاسم والنشاط التجاري (النص المكتوب على اللوحة)") },
-                        leadingIcon = { Icon(Icons.Default.Business, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-                        shape = RoundedCornerShape(16.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("brand_text_input")
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.Phone,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "رقم هاتف التواصل للطلب:",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
 
                     OutlinedTextField(
-                        value = contactDetails,
-                        onValueChange = { contactDetails = it },
-                        label = { Text("أرقام الهواتف، العناوين، وحسابات التواصل للتصميم") },
-                        leadingIcon = { Icon(Icons.Default.ContactPhone, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-                        shape = RoundedCornerShape(16.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    OutlinedTextField(
-                        value = colorNotes,
-                        onValueChange = { colorNotes = it },
-                        label = { Text("الألوان المفضلة وملاحظات التنفيذ") },
-                        leadingIcon = { Icon(Icons.Default.ColorLens, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-                        shape = RoundedCornerShape(16.dp),
+                        value = contactPhoneInput,
+                        onValueChange = { contactPhoneInput = it },
+                        placeholder = { Text("771051177") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                        shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
             }
         }
 
-        // Logo & Site Photo Attachments (Android PhotoPicker)
+        // Section 4: Attachments & Reference Photos
         item {
             Card(
-                shape = RoundedCornerShape(22.dp),
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "5. إرفاق الشعار وصورة موقع اللوحة",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onSurface
+                        text = "المرفقات أو نماذج توضيحية (اختياري)",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
                     )
-                    Spacer(modifier = Modifier.height(10.dp))
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedButton(
+                        onClick = {
+                            photoPickerLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            )
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        // Logo Attachment Box
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(120.dp)
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
-                                .clickable {
-                                    logoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                                }
-                                .testTag("logo_picker_button"),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (logoUri != null) {
-                                AsyncImage(
-                                    model = logoUri,
-                                    contentDescription = "الشعار المرفق",
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
-                                )
-                            } else {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text("إرفاق الشعار", style = MaterialTheme.typography.labelMedium)
-                                }
-                            }
-                        }
+                        Icon(Icons.Default.AddPhotoAlternate, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(if (finalAttachment.isNotBlank()) "تم اختيار مرفق ✓" else "اختيار صورة أو شعار من المعرض")
+                    }
 
-                        // Storefront Site Photo Attachment Box
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    OutlinedTextField(
+                        value = referenceAttachmentUrl,
+                        onValueChange = { referenceAttachmentUrl = it },
+                        placeholder = { Text("أو أدخل رابط المرفق المرجعي (Drive / رابط خارجي)") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    if (finalAttachment.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(8.dp))
                         Box(
                             modifier = Modifier
-                                .weight(1f)
-                                .height(120.dp)
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
-                                .clickable {
-                                    sitePhotoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                                }
-                                .testTag("site_photo_picker_button"),
-                            contentAlignment = Alignment.Center
+                                .fillMaxWidth()
+                                .height(130.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
                         ) {
-                            if (sitePhotoUri != null) {
-                                AsyncImage(
-                                    model = sitePhotoUri,
-                                    contentDescription = "صورة واجهة المحل",
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
-                                )
-                            } else {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(Icons.Default.CropSquare, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text("صورة موقع اللوحة", style = MaterialTheme.typography.labelMedium)
-                                }
+                            AsyncImage(
+                                model = finalAttachment,
+                                contentDescription = "معاينة المرفق",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Fit
+                            )
+                            IconButton(
+                                onClick = {
+                                    selectedImageUri = null
+                                    referenceAttachmentUrl = ""
+                                },
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(4.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.Black.copy(alpha = 0.6f))
+                                    .size(26.dp)
+                            ) {
+                                Icon(Icons.Default.Delete, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
                             }
                         }
                     }
@@ -429,13 +406,41 @@ fun NewOrderScreen(
             }
         }
 
-        // Validation error display
+        // Info notice card
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFF0FDF4))
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.Info,
+                        contentDescription = null,
+                        tint = Color(0xFF16A34A),
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = "بعد إرسال الطلب، تقوم الإدارة بمراجعة المواصفات بدقة وتحديد التسعيرة الرسمية وموعد التسليم لاعتمادها من طرفك.",
+                        fontSize = 12.sp,
+                        color = Color(0xFF15803D),
+                        lineHeight = 18.sp
+                    )
+                }
+            }
+        }
+
         if (validationError != null) {
             item {
                 Text(
                     text = validationError ?: "",
                     color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp
                 )
             }
         }
@@ -444,35 +449,39 @@ fun NewOrderScreen(
         item {
             Button(
                 onClick = {
-                    if (brandText.isBlank()) {
-                        validationError = "يرجى إدخال اسم النشاط أو النص المطلوب بالتصميم"
+                    if (designTypeInput.isBlank()) {
+                        validationError = "يرجى كتابة عنوان أو نوع التصميم المطلوب"
                         return@Button
                     }
-                    if (width <= 0.0 || height <= 0.0) {
-                        validationError = "يرجى إدخال أبعاد صحيحة للعمل"
+                    if (detailedSpecsInput.isBlank()) {
+                        validationError = "يرجى كتابة مواصفات وتفاصيل التصميم المطلوب"
+                        return@Button
+                    }
+
+                    // Check Account Activation:
+                    val isActivated = userProfile?.isAccountActivated == true || mainViewModel.isSuperAdmin()
+                    if (!isActivated) {
+                        showActivationDialog = true
                         return@Button
                     }
 
                     validationError = null
                     val order = OrderItem(
-                        clientId = userProfile?.uid ?: "",
-                        clientName = userProfile?.name ?: "عميل",
-                        clientPhone = userProfile?.phone ?: "",
-                        category = selectedCategory,
-                        materialId = selectedMaterialId,
-                        materialName = selectedMaterialName.ifBlank { "حسب تقدير المصمم" },
-                        width = width,
-                        height = height,
-                        brandText = brandText,
-                        contactDetails = contactDetails,
-                        notes = colorNotes,
-                        logoUrl = logoUri?.toString() ?: "",
-                        sitePhotoUrl = sitePhotoUri?.toString() ?: "",
-                        currency = "YER"
+                        clientId = userProfile?.uid.orEmpty(),
+                        clientName = userProfile?.name.orEmpty().ifBlank { "عميل بصمة" },
+                        clientPhone = contactPhoneInput.ifBlank { userProfile?.phone.orEmpty() },
+                        clientEmail = userProfile?.email.orEmpty(),
+                        designType = designTypeInput.trim(),
+                        detailedSpecs = detailedSpecsInput.trim(),
+                        width = widthInput.toDoubleOrNull() ?: 0.0,
+                        height = heightInput.toDoubleOrNull() ?: 0.0,
+                        referenceAttachmentUrl = finalAttachment,
+                        contactDetails = contactPhoneInput
                     )
 
                     orderViewModel.submitNewOrder(order) {
-                        onOrderSubmitted()
+                        generatedOrderNum = order.displayOrderNumber
+                        showSuccessDialog = true
                     }
                 },
                 enabled = !isSubmitting,
@@ -480,23 +489,147 @@ fun NewOrderScreen(
                     .fillMaxWidth()
                     .height(54.dp)
                     .testTag("submit_order_button"),
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
             ) {
                 if (isSubmitting) {
-                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                    CircularProgressIndicator(modifier = Modifier.size(22.dp), color = Color.White)
                 } else {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(20.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "إرسال طلب العمل واستلام التسعير",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp
-                        )
-                    }
+                    Icon(Icons.Default.Send, contentDescription = null, tint = Color.White)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "إرسال الطلب لتلقي التسعيرة المعتمدة",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        color = Color.White
+                    )
                 }
             }
         }
+    }
+
+    // 1. WhatsApp Activation Dialog
+    if (showActivationDialog) {
+        AlertDialog(
+            onDismissRequest = { showActivationDialog = false },
+            icon = {
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF25D366).copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = null,
+                        tint = Color(0xFF25D366),
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            },
+            title = {
+                Text(
+                    text = "تفعيل الحساب مطلوب",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 17.sp,
+                    textAlign = TextAlign.Center
+                )
+            },
+            text = {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = "عذراً، يجب تفعيل حسابك أولاً لتتمكن من تقديم الطلبات. اضغط على الزر للتواصل وتفعيل حسابك مباشرة عبر واتساب الإدارة.",
+                        fontSize = 13.sp,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 20.sp
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF3C7)),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text(
+                            text = "تنبيه: يرجى إرسال الرسالة من نفس رقم هاتفك المسجل (${userProfile?.phone}) لمطابقة البيانات واعتماد التفعيل من قِبل المدير.",
+                            fontSize = 11.sp,
+                            color = Color(0xFF92400E),
+                            modifier = Modifier.padding(8.dp),
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showActivationDialog = false
+                        WhatsAppHelper.openAccountActivation(
+                            context = context,
+                            userName = userProfile?.name.orEmpty().ifBlank { "مستخدم جديد" },
+                            userPhone = userProfile?.phone.orEmpty(),
+                            userUid = userProfile?.uid.orEmpty(),
+                            adminWhatsApp = appConfig.whatsappNumber
+                        )
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("تفعيل الحساب عبر واتساب", fontWeight = FontWeight.Bold, color = Color.White)
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = { showActivationDialog = false },
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("إلغاء")
+                }
+            }
+        )
+    }
+
+    // 2. Success Dialog
+    if (showSuccessDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showSuccessDialog = false
+                onOrderSubmitted()
+            },
+            icon = {
+                Icon(
+                    Icons.Default.CheckCircle,
+                    contentDescription = null,
+                    tint = Color(0xFF10B981),
+                    modifier = Modifier.size(46.dp)
+                )
+            },
+            title = {
+                Text(
+                    text = "تم استلام طلبك بنجاح!",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    textAlign = TextAlign.Center
+                )
+            },
+            text = {
+                Text(
+                    text = "تم استلام مواصفات طلبك بنجاح، سيتم مراجعة المتطلبات وتحديد السعر المناسب من قِبل الإدارة في أقرب وقت لتتمكن من اعتماده وسداد الدفعة المقدمة.",
+                    fontSize = 13.sp,
+                    textAlign = TextAlign.Center,
+                    lineHeight = 20.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showSuccessDialog = false
+                        onOrderSubmitted()
+                    },
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("متابعة طلباتي", fontWeight = FontWeight.Bold)
+                }
+            }
+        )
     }
 }

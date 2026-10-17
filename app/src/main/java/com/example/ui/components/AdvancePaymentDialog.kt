@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -34,7 +33,6 @@ import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Payment
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -57,7 +55,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -75,6 +72,7 @@ import kotlinx.coroutines.launch
 fun AdvancePaymentDialog(
     order: OrderItem,
     orderViewModel: OrderViewModel,
+    isFinalPayment: Boolean = false,
     onDismiss: () -> Unit,
     onPaymentSubmitted: () -> Unit
 ) {
@@ -84,6 +82,7 @@ fun AdvancePaymentDialog(
     val total = order.effectiveTotal
     val advance = order.calculatedAdvance
     val remaining = order.calculatedRemaining
+    val currentPaymentTarget = if (isFinalPayment) remaining else advance
     val currency = order.currency.ifBlank { "ر.ي" }
 
     // Wallets list
@@ -130,11 +129,11 @@ fun AdvancePaymentDialog(
                 Spacer(modifier = Modifier.width(10.dp))
                 Column {
                     Text(
-                        text = "سداد الدفعة المقدمة (70%)",
+                        text = if (isFinalPayment) "سداد الدفعة المتبقية (30%)" else "سداد الدفعة المقدمة (70%)",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                     )
                     Text(
-                        text = "طلب #${order.id.take(6)} • ${order.category}",
+                        text = "طلب ${order.displayOrderNumber} • ${order.designType.ifBlank { order.category }}",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
@@ -166,26 +165,29 @@ fun AdvancePaymentDialog(
 
                         Spacer(modifier = Modifier.height(6.dp))
 
-                        // Advance Highlight (70%)
+                        // Target payment highlight
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                                .background(
+                                    if (isFinalPayment) Color(0xFF10B981).copy(alpha = 0.15f)
+                                    else MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                                )
                                 .padding(horizontal = 10.dp, vertical = 6.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "الدفعة المقدمة المطلوبة (70%):",
+                                text = if (isFinalPayment) "الدفعة المتبقية للاستلام (30%):" else "الدفعة المقدمة المطلوبة (70%):",
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary,
+                                color = if (isFinalPayment) Color(0xFF047857) else MaterialTheme.colorScheme.primary,
                                 fontSize = 13.sp
                             )
                             Text(
-                                text = "${advance.toInt()} $currency",
+                                text = "${currentPaymentTarget.toInt()} $currency",
                                 fontWeight = FontWeight.ExtraBold,
-                                color = MaterialTheme.colorScheme.primary,
+                                color = if (isFinalPayment) Color(0xFF047857) else MaterialTheme.colorScheme.primary,
                                 fontSize = 16.sp
                             )
                         }
@@ -196,8 +198,17 @@ fun AdvancePaymentDialog(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text("المتبقي عند التسليم النهائي (30%):", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
-                            Text("${remaining.toInt()} $currency", fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
+                            Text(
+                                text = if (isFinalPayment) "الدفعة المقدمة المسددة (70%):" else "المتبقي عند التسليم النهائي (30%):",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.outline
+                            )
+                            Text(
+                                text = "${if (isFinalPayment) advance.toInt() else remaining.toInt()} $currency",
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.outline
+                            )
                         }
                     }
                 }
@@ -390,20 +401,37 @@ fun AdvancePaymentDialog(
                     isSubmitting = true
                     validationError = null
 
-                    orderViewModel.submitAdvancePayment(
-                        order = order,
-                        paymentMethod = selectedWallet,
-                        receiptImageUrl = finalReceiptPath,
-                        onSuccess = {
-                            isSubmitting = false
-                            Toast.makeText(
-                                context,
-                                "سيتم مراجعة التحويل وتأكيد بدء العمل على طلبك في أقرب وقت.",
-                                Toast.LENGTH_LONG
-                            ).show()
-                            onPaymentSubmitted()
-                        }
-                    )
+                    if (isFinalPayment) {
+                        orderViewModel.submitFinalPayment(
+                            order = order,
+                            paymentMethod = selectedWallet,
+                            receiptImageUrl = finalReceiptPath,
+                            onSuccess = {
+                                isSubmitting = false
+                                Toast.makeText(
+                                    context,
+                                    "تم إرسال إشعار الدفعة النهائية بنجاح، سيتم مراجعته واعتماد تسليم العمل النهائي.",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                                onPaymentSubmitted()
+                            }
+                        )
+                    } else {
+                        orderViewModel.submitAdvancePayment(
+                            order = order,
+                            paymentMethod = selectedWallet,
+                            receiptImageUrl = finalReceiptPath,
+                            onSuccess = {
+                                isSubmitting = false
+                                Toast.makeText(
+                                    context,
+                                    "سيتم مراجعة التحويل وتأكيد بدء العمل على طلبك في أقرب وقت.",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                                onPaymentSubmitted()
+                            }
+                        )
+                    }
                 },
                 enabled = isFormComplete && !isSubmitting,
                 shape = RoundedCornerShape(12.dp),

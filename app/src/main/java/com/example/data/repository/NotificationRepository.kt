@@ -78,4 +78,6 @@ class NotificationRepository(context: Context) {
             handleFirestoreError(e, OperationType.DELETE, "notifications/$notificationId")
         }
     }
+
+    suspend fun deleteNotification(notificationId: String) = clearNotification(notificationId)
 }

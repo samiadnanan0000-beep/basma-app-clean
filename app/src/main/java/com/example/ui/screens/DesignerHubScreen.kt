@@ -1,12 +1,9 @@
 package com.example.ui.screens
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,38 +21,39 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Collections
-import androidx.compose.material.icons.filled.Campaign
+import androidx.compose.material.icons.filled.AccountBalanceWallet
+import androidx.compose.material.icons.filled.Assignment
+import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.Chat
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.Collections
+import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.PriceCheck
+import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.RadioButtonChecked
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.SwitchAccount
-import androidx.compose.material.icons.filled.Upload
-import androidx.compose.material.icons.filled.VerifiedUser
+import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -63,518 +61,244 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.layout.ContentScale
 import coil.compose.AsyncImage
-import kotlinx.coroutines.launch
 import com.example.data.model.OrderItem
-import com.example.data.model.UserProfile
+import com.example.data.model.OrderStatus
 import com.example.ui.viewmodel.MainViewModel
 import com.example.ui.viewmodel.OrderViewModel
+import com.example.util.WhatsAppHelper
 
 @Composable
 fun DesignerHubScreen(
     mainViewModel: MainViewModel,
     orderViewModel: OrderViewModel,
-    onNavigateToCalculator: () -> Unit,
-    onNavigateToMaterials: () -> Unit,
-    onNavigateToPartners: () -> Unit,
-    onNavigateToAdminDashboard: (() -> Unit)? = null,
     onNavigateToPortfolio: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
-    val coroutineScope = rememberCoroutineScope()
-    val orders by orderViewModel.orders.collectAsState()
     val userProfile by mainViewModel.userProfile.collectAsState()
-    val isSuperAdmin = mainViewModel.isSuperAdmin()
+    val designerOrders by orderViewModel.designerOrders.collectAsState()
 
-    var showBroadcastDialog by remember { mutableStateOf(false) }
-    var broadcastTitle by remember { mutableStateOf("") }
-    var broadcastMessage by remember { mutableStateOf("") }
+    var selectedTab by remember { mutableIntStateOf(0) }
+    var chatOrder by remember { mutableStateOf<OrderItem?>(null) }
+    var rejectDialogOrder by remember { mutableStateOf<OrderItem?>(null) }
 
-    var showTeamDialog by remember { mutableStateOf(false) }
-    val allUsers by mainViewModel.userRepository.observeAllUsers().collectAsState(initial = emptyList())
+    val designerId = userProfile?.uid.orEmpty()
 
-    var activeOrderTab by remember { mutableStateOf(0) }
-    val tabs = listOf("كل الطلبات (${orders.size})", "بانتظار التسعير (${orders.count { it.status == "pending" }})", "قيد التنفيذ (${orders.count { it.status == "in_production" }})")
-
-    val filteredOrders = when (activeOrderTab) {
-        1 -> orders.filter { it.status == "pending" }
-        2 -> orders.filter { it.status == "in_production" }
-        else -> orders
+    LaunchedEffect(designerId) {
+        if (designerId.isNotBlank()) {
+            orderViewModel.startObservingDesignerOrders(designerId)
+        }
     }
 
-    // Quoting Dialog
-    val quotingOrder by orderViewModel.quotingOrder.collectAsState()
-    var quotePriceInput by remember { mutableStateOf("") }
-    var quoteCurrency by remember { mutableStateOf("YER") }
-    var quoteTurnaround by remember { mutableStateOf("48 ساعة") }
-    var quoteProofUrl by remember { mutableStateOf("") }
+    if (chatOrder != null) {
+        OrderChatDialog(
+            order = chatOrder!!,
+            orderViewModel = orderViewModel,
+            onDismiss = { chatOrder = null }
+        )
+    }
 
-    if (quotingOrder != null) {
-        AlertDialog(
-            onDismissRequest = { orderViewModel.closeQuoteDialog() },
-            title = {
-                Text(
-                    text = "تسعير الطلب #${quotingOrder?.id?.take(6)}",
-                    fontWeight = FontWeight.Bold
+    if (rejectDialogOrder != null) {
+        DesignerRejectDialog(
+            order = rejectDialogOrder!!,
+            onConfirmReject = { reason ->
+                orderViewModel.designerRejectOrder(
+                    orderId = rejectDialogOrder!!.id,
+                    designerId = designerId,
+                    designerName = userProfile?.name ?: "المصمم",
+                    reason = reason,
+                    onSuccess = {
+                        rejectDialogOrder = null
+                        Toast.makeText(context, "تم تسجيل اعتذارك وإعادة إسناد الطلب للإدارة", Toast.LENGTH_SHORT).show()
+                    }
                 )
             },
-            text = {
-                Column {
-                    Text(
-                        text = "العميل: ${quotingOrder?.clientName} (${quotingOrder?.category})",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    OutlinedTextField(
-                        value = quotePriceInput,
-                        onValueChange = { quotePriceInput = it },
-                        label = { Text("السعر الإجمالي") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        listOf("YER", "SAR", "USD").forEach { curr ->
-                            val selected = quoteCurrency == curr
-                            Button(
-                                onClick = { quoteCurrency = curr },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                                    contentColor = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
-                                ),
-                                shape = RoundedCornerShape(10.dp),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text(curr, fontSize = 12.sp)
-                            }
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = quoteTurnaround,
-                        onValueChange = { quoteTurnaround = it },
-                        label = { Text("مدة التسليم والتنفيذ") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = quoteProofUrl,
-                        onValueChange = { quoteProofUrl = it },
-                        label = { Text("رابط صورة بروفة التصميم (اختياري)") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        val p = quotePriceInput.toDoubleOrNull() ?: 0.0
-                        if (p > 0) {
-                            orderViewModel.submitQuote(p, quoteCurrency, quoteTurnaround, quoteProofUrl)
-                            quotePriceInput = ""
-                            quoteProofUrl = ""
-                        }
-                    }
-                ) {
-                    Text("إرسال التسعير للعميل")
-                }
-            },
-            dismissButton = {
-                OutlinedButton(onClick = { orderViewModel.closeQuoteDialog() }) {
-                    Text("إلغاء")
-                }
-            }
+            onDismiss = { rejectDialogOrder = null }
         )
     }
 
-    // Broadcast Announcement Dialog
-    if (showBroadcastDialog) {
-        AlertDialog(
-            onDismissRequest = { showBroadcastDialog = false },
-            title = { Text("إذاعة إشعار أو تنبيه عام للعملاء 📢", fontWeight = FontWeight.Bold) },
-            text = {
-                Column {
-                    Text("سيتم إرسال هذا التنبيه فوراً إلى شاشات مركز الإشعارات لجميع العملاء.")
-                    Spacer(modifier = Modifier.height(10.dp))
-                    OutlinedTextField(
-                        value = broadcastTitle,
-                        onValueChange = { broadcastTitle = it },
-                        label = { Text("عنوان التنبيه") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = broadcastMessage,
-                        onValueChange = { broadcastMessage = it },
-                        label = { Text("تفاصيل الإشعار") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        if (broadcastTitle.isNotBlank() && broadcastMessage.isNotBlank()) {
-                            coroutineScope.launch {
-                                mainViewModel.notificationRepository.sendNotification(
-                                    title = broadcastTitle,
-                                    message = broadcastMessage,
-                                    type = "general",
-                                    targetId = "all"
-                                )
-                                showBroadcastDialog = false
-                                broadcastTitle = ""
-                                broadcastMessage = ""
-                                Toast.makeText(context, "تم إرسال الإشعار لجميع العملاء بنجاح", Toast.LENGTH_SHORT).show()
-                            }
-                        }
-                    }
-                ) {
-                    Text("إرسال التنبيه")
-                }
-            },
-            dismissButton = {
-                OutlinedButton(onClick = { showBroadcastDialog = false }) {
-                    Text("إلغاء")
-                }
-            }
-        )
-    }
-
-    // Team Delegation Dialog (Super Admin only)
-    if (showTeamDialog) {
-        AlertDialog(
-            onDismissRequest = { showTeamDialog = false },
-            title = { Text("إدارة فريق المصممين والصلاحيات 👥", fontWeight = FontWeight.Bold) },
-            text = {
-                LazyColumn(modifier = Modifier.height(300.dp)) {
-                    items(allUsers) { u ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 6.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(u.name.ifBlank { "مستخدم" }, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                Text(u.email.ifBlank { u.phone }, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                                Text("الرتبة الحالية: ${u.role}", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
-                            }
-                            if (u.role != "super_admin") {
-                                if (u.role == "client") {
-                                    Button(
-                                        onClick = {
-                                            coroutineScope.launch {
-                                                mainViewModel.userRepository.updateUserRole(u.uid, "designer")
-                                            }
-                                        },
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                                        shape = RoundedCornerShape(8.dp)
-                                    ) {
-                                        Text("ترقية لمصمم", fontSize = 11.sp)
-                                    }
-                                } else if (u.role == "designer") {
-                                    OutlinedButton(
-                                        onClick = {
-                                            coroutineScope.launch {
-                                                mainViewModel.userRepository.updateUserRole(u.uid, "client")
-                                            }
-                                        },
-                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                                        shape = RoundedCornerShape(8.dp)
-                                    ) {
-                                        Text("إلغاء الترقية", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                Button(onClick = { showTeamDialog = false }) {
-                    Text("إغلاق")
-                }
-            }
-        )
-    }
-
-    LazyColumn(
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-        contentPadding = PaddingValues(top = 16.dp, bottom = 100.dp)
     ) {
-        // Top Hub Header
-        item {
+        // Designer Header Card
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f))
+        ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
+                Box(
+                    modifier = Modifier
+                        .size(46.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.Palette, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "لوحة المصمم والإدارة 🎨",
-                        style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onBackground
+                        text = "مساحة المصمم المعتمد 🎨",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
                     )
                     Text(
-                        text = "${userProfile?.name} • ${if (isSuperAdmin) "المدير العام والمصمم الأساسي" else "مصمم معتمد"}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary
+                        text = userProfile?.name.orEmpty().ifBlank { "مصمم بصمة" },
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                     )
                 }
 
-                // Switch to Client Mode Button
-                Button(
-                    onClick = { mainViewModel.toggleClientPreview() },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                    shape = RoundedCornerShape(14.dp),
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
-                ) {
-                    Icon(Icons.Default.SwitchAccount, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("وضع العميل", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
-                }
-            }
-        }
-
-        // Quick Hub Tool Cards
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                // Calculator Tool
-                Card(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable { onNavigateToCalculator() },
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Column(modifier = Modifier.padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Default.PriceCheck, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("حاسبة الإنتاج", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-
-                // Materials Tool
-                Card(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable { onNavigateToMaterials() },
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Column(modifier = Modifier.padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Default.Schedule, contentDescription = null, tint = Color(0xFF10B981))
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("إدارة الخامات", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-
-                // Partners Tool
-                Card(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable { onNavigateToPartners() },
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Column(modifier = Modifier.padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Default.Group, contentDescription = null, tint = Color(0xFF8B5CF6))
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("المطابع الشريكة", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-
-                // Broadcast Tool
-                Card(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable { showBroadcastDialog = true },
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Column(modifier = Modifier.padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Default.Campaign, contentDescription = null, tint = Color(0xFFF59E0B))
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("إذاعة تنبيه", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-        }
-
-        // Portfolio Management Banner for Designers and Admin
-        item {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onNavigateToPortfolio?.invoke() },
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Collections, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column {
-                            Text("نماذج من أعمالنا (المعرض العام) 🎨", fontWeight = FontWeight.Bold)
-                            Text("إضافة وحذف وتحديث صور وأعمال الاستوديو المعروضة للعملاء", fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
-                        }
-                    }
-                    Text("إدارة ❯", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                }
-            }
-        }
-
-        // Super Admin Delegation Banner (if super_admin)
-        if (isSuperAdmin) {
-            item {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            if (onNavigateToAdminDashboard != null) {
-                                onNavigateToAdminDashboard()
-                            } else {
-                                showTeamDialog = true
-                            }
-                        },
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF6FF))
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.VerifiedUser, contentDescription = null, tint = Color(0xFF2563EB))
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Column {
-                                Text("إدارة وتفويض فريق المصممين", fontWeight = FontWeight.Bold, color = Color(0xFF1E40AF))
-                                Text("ترقية العملاء المسجلين لمصممين بصلاحيات تسعير", fontSize = 12.sp, color = Color(0xFF3B82F6))
-                            }
-                        }
-                        Icon(Icons.Default.Person, contentDescription = null, tint = Color(0xFF2563EB))
-                    }
-                }
-            }
-        }
-
-        // Tab Row for Orders Filter
-        item {
-            ScrollableTabRow(
-                selectedTabIndex = activeOrderTab,
-                edgePadding = 0.dp,
-                containerColor = Color.Transparent,
-                divider = {}
-            ) {
-                tabs.forEachIndexed { index, title ->
-                    Tab(
-                        selected = activeOrderTab == index,
-                        onClick = { activeOrderTab = index },
-                        text = { Text(title, fontWeight = if (activeOrderTab == index) FontWeight.Bold else FontWeight.Normal) }
+                // Rating & Task Count Badges
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFFF59E0B), modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(2.dp))
+                    Text(
+                        text = String.format("%.1f", userProfile?.ratingAverage ?: 5.0f),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp
                     )
                 }
             }
         }
 
-        // Incoming Orders List
-        items(filteredOrders, key = { it.id }) { order ->
-            DesignerOrderCard(
-                order = order,
-                onQuote = { orderViewModel.openQuoteDialog(order) },
-                onUploadProof = { proofUrl -> orderViewModel.uploadProof(order, proofUrl) },
-                onUpdateStatus = { status -> orderViewModel.updateStatus(order, status) }
+        // 3 Safe Tabs: Only designer operational views!
+        TabRow(
+            selectedTabIndex = selectedTab,
+            containerColor = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.primary
+        ) {
+            Tab(
+                selected = selectedTab == 0,
+                onClick = { selectedTab = 0 },
+                text = { Text("مهام التصميم (${designerOrders.filter { it.status != OrderStatus.COMPLETED }.size})", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+            )
+            Tab(
+                selected = selectedTab == 1,
+                onClick = { selectedTab = 1 },
+                text = { Text("محفظتي والأرباح", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+            )
+            Tab(
+                selected = selectedTab == 2,
+                onClick = { selectedTab = 2 },
+                text = { Text("معرض أعمالي", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+            )
+        }
+
+        when (selectedTab) {
+            0 -> DesignerTasksTab(
+                orders = designerOrders.filter { it.status != OrderStatus.COMPLETED },
+                designerId = designerId,
+                onAcceptOrder = { order ->
+                    orderViewModel.designerAcceptOrder(order.id, designerId) {
+                        Toast.makeText(context, "تم قبول الطلب وبدء العمل بنجاح 🟢", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                onRequestReject = { order -> rejectDialogOrder = order },
+                onOpenChat = { order -> chatOrder = order },
+                onSubmitDraftToAdmin = { order ->
+                    WhatsAppHelper.openChat(
+                        context = context,
+                        message = "السلام عليكم إدارة بصمة، تم إنجاز مسودة التصميم للطلب رقم ${order.displayOrderNumber} (${order.designType})، يرجى التكرم بالمراجعة وإرسالها للعميل."
+                    )
+                }
+            )
+            1 -> DesignerEarningsTab(
+                orders = designerOrders
+            )
+            2 -> DesignerPortfolioShortcutTab(
+                onNavigateToPortfolio = onNavigateToPortfolio
             )
         }
     }
 }
 
 @Composable
-fun DesignerOrderCard(
-    order: OrderItem,
-    onQuote: () -> Unit,
-    onUploadProof: (String) -> Unit,
-    onUpdateStatus: (String) -> Unit
+fun DesignerTasksTab(
+    orders: List<OrderItem>,
+    designerId: String,
+    onAcceptOrder: (OrderItem) -> Unit,
+    onRequestReject: (OrderItem) -> Unit,
+    onOpenChat: (OrderItem) -> Unit,
+    onSubmitDraftToAdmin: (OrderItem) -> Unit
 ) {
-    val context = LocalContext.current
-    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-    var showProofUploadDialog by remember { mutableStateOf(false) }
-    var proofUrlInput by remember { mutableStateOf("") }
-
-    if (showProofUploadDialog) {
-        AlertDialog(
-            onDismissRequest = { showProofUploadDialog = false },
-            title = { Text("رفع بروفة التصميم للعميل 🎨", fontWeight = FontWeight.Bold) },
-            text = {
-                Column {
-                    Text("أدخل رابط صورة البروفة المعدة للطلب:")
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = proofUrlInput,
-                        onValueChange = { proofUrlInput = it },
-                        label = { Text("رابط صورة البروفة (URL)") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        if (proofUrlInput.isNotBlank()) {
-                            onUploadProof(proofUrlInput)
-                            showProofUploadDialog = false
-                            proofUrlInput = ""
-                        }
-                    }
-                ) {
-                    Text("رفع وإشعار العميل")
-                }
-            },
-            dismissButton = {
-                OutlinedButton(onClick = { showProofUploadDialog = false }) {
-                    Text("إلغاء")
-                }
+    if (orders.isEmpty()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(Icons.Default.HourglassEmpty, contentDescription = null, tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(54.dp))
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "لا توجد مهام نشطة حالياً",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp
+                )
+                Text(
+                    text = "أنت الآن في وضع (متفرغ / متاح للعمل)، ستظهر لك الطلبات فور إسنادها من الإدارة.",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.outline,
+                    textAlign = TextAlign.Center
+                )
             }
-        )
+        }
+    } else {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            contentPadding = PaddingValues(bottom = 80.dp)
+        ) {
+            items(orders, key = { it.id }) { order ->
+                DesignerTaskCard(
+                    order = order,
+                    onAccept = { onAcceptOrder(order) },
+                    onReject = { onRequestReject(order) },
+                    onOpenChat = { onOpenChat(order) },
+                    onSubmitDraft = { onSubmitDraftToAdmin(order) }
+                )
+            }
+        }
     }
+}
+
+@Composable
+fun DesignerTaskCard(
+    order: OrderItem,
+    onAccept: () -> Unit,
+    onReject: () -> Unit,
+    onOpenChat: () -> Unit,
+    onSubmitDraft: () -> Unit
+) {
+    val isPendingAcceptance = order.status == OrderStatus.PENDING_DESIGNER_ACCEPTANCE
 
     Card(
-        shape = RoundedCornerShape(22.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            // Header Row
+            // Header Row: Order Number & Designer Fee
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -582,190 +306,369 @@ fun DesignerOrderCard(
             ) {
                 Column {
                     Text(
-                        text = order.brandText.ifBlank { "طلب عمل" },
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onSurface
+                        text = "طلب ${order.displayOrderNumber}",
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontSize = 15.sp
                     )
                     Text(
-                        text = "العميل: ${order.clientName} • ${order.category}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary
+                        text = order.designType.ifBlank { "تصميم فني" },
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 13.sp
                     )
                 }
-                StatusBadge(status = order.status)
+
+                // Net designer fee badge
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFDCFCE7)),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text(
+                        text = "مستحقاتك: ${order.designerFee.toInt()} ر.ي",
+                        color = Color(0xFF166534),
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Quick Copy Row for text and phone
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .padding(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+            // Technical Specifications (CLIENT PII IS COMPLETELY REMOVED!)
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("النص: ${order.brandText}", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    if (order.clientPhone.isNotBlank()) {
-                        Text("الهاتف: ${order.clientPhone}", fontSize = 12.sp)
-                    }
-                    Text("المقاس: ${order.width}م × ${order.height}م (${"%.2f".format(order.width * order.height)}م²)", fontSize = 12.sp)
-                }
+                Column(modifier = Modifier.padding(10.dp)) {
+                    Text("المواصفات الفنية والشروط:", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = order.detailedSpecs.ifBlank { "لم تُحدد مواصفات إضافية" },
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                    )
 
-                Row {
-                    IconButton(
-                        onClick = {
-                            val copyText = "اسم النشاط: ${order.brandText}\nالمقاسات: ${order.width}x${order.height}m\nالخامة: ${order.materialName}\nبيانات الاتصال: ${order.contactDetails}\nملاحظات: ${order.notes}"
-                            clipboard.setPrimaryClip(ClipData.newPlainText("بيانات الطلب", copyText))
-                            Toast.makeText(context, "تم نسخ تفاصيل التصميم للحافظة", Toast.LENGTH_SHORT).show()
-                        }
-                    ) {
-                        Icon(Icons.Default.ContentCopy, contentDescription = "نسخ تفاصيل الطلب", tint = MaterialTheme.colorScheme.primary)
+                    if (order.width > 0 && order.height > 0) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "الأبعاد المطلوبة: ${order.width}م (عرض) × ${order.height}م (ارتفاع)",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
                     }
 
-                    if (order.clientPhone.isNotBlank()) {
-                        IconButton(
-                            onClick = {
-                                val message = "مرحباً ${order.clientName}، معك مصمم استوديو بصمة بخصوص طلبكم #${order.id.take(6)} (${order.brandText})."
-                                val uri = Uri.parse("https://wa.me/967${order.clientPhone}?text=${Uri.encode(message)}")
-                                context.startActivity(Intent(Intent.ACTION_VIEW, uri))
-                            }
-                        ) {
-                            Icon(Icons.Default.Chat, contentDescription = "مراسلة واتساب", tint = Color(0xFF25D366))
-                        }
+                    if (!order.estimatedDeliveryTime.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "موعد التسليم المتوقع: ${order.estimatedDeliveryTime}",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFD97706)
+                        )
                     }
                 }
             }
 
-            // Attached Logo & Site Photo preview thumbnails
-            if (order.logoUrl.isNotBlank() || order.sitePhotoUrl.isNotBlank()) {
-                Spacer(modifier = Modifier.height(10.dp))
+            // Reference Attachment preview if available
+            if (order.referenceAttachmentUrl.isNotBlank()) {
+                Spacer(modifier = Modifier.height(8.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (order.logoUrl.isNotBlank()) {
-                        Card(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(80.dp),
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Box(modifier = Modifier.fillMaxSize()) {
-                                AsyncImage(
-                                    model = order.logoUrl,
-                                    contentDescription = "شعار العميل",
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
-                                )
-                                Box(
-                                    modifier = Modifier
-                                        .align(Alignment.BottomStart)
-                                        .background(Color.Black.copy(alpha = 0.6f))
-                                        .padding(4.dp)
-                                ) {
-                                    Text("شعار العميل", color = Color.White, fontSize = 10.sp)
-                                }
-                            }
-                        }
-                    }
-
-                    if (order.sitePhotoUrl.isNotBlank()) {
-                        Card(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(80.dp),
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Box(modifier = Modifier.fillMaxSize()) {
-                                AsyncImage(
-                                    model = order.sitePhotoUrl,
-                                    contentDescription = "صورة الواجهة",
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
-                                )
-                                Box(
-                                    modifier = Modifier
-                                        .align(Alignment.BottomStart)
-                                        .background(Color.Black.copy(alpha = 0.6f))
-                                        .padding(4.dp)
-                                ) {
-                                    Text("صورة الموقع", color = Color.White, fontSize = 10.sp)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Rejection reason note if client requested edits
-            if (order.rejectionReason.isNotBlank() && !order.proofApproved) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(Color(0xFFFEE2E2))
-                        .padding(8.dp)
-                ) {
-                    Text(
-                        text = "ملاحظات وتعديل العميل: ${order.rejectionReason}",
-                        color = Color(0xFFB91C1C),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Icon(Icons.Default.Image, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("يوجد مرفق / صورة مرجعية للطلب", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
                 }
             }
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Action Buttons for Designer
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                // Quoting Button
-                Button(
-                    onClick = onQuote,
-                    modifier = Modifier.weight(1f),
+            // Accept / Reject Actions (when PENDING_DESIGNER_ACCEPTANCE)
+            if (isPendingAcceptance) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF3C7)),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text(if (order.price > 0) "تعديل التسعير" else "تسعير الطلب", fontSize = 12.sp)
-                }
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Warning, contentDescription = null, tint = Color(0xFFD97706), modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("تم إسناد هذا الطلب إليك، يرجى القبول أو الاعتذار:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF92400E))
+                        }
 
-                // Proof Upload Button
-                OutlinedButton(
-                    onClick = { showProofUploadDialog = true },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Icon(Icons.Default.Upload, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("رفع بروفة", fontSize = 12.sp)
-                }
+                        Spacer(modifier = Modifier.height(8.dp))
 
-                // Quick Move status to production / completed
-                if (order.status == "in_production") {
-                    Button(
-                        onClick = { onUpdateStatus("completed") },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("اكتمل 🏁", fontSize = 12.sp)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = onAccept,
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
+                            ) {
+                                Text("قبول وبدء العمل", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            }
+
+                            OutlinedButton(
+                                onClick = onReject,
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text("اعتذار / رفض", color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+                            }
+                        }
                     }
-                } else if (order.status == "quoted" && order.proofApproved) {
+                }
+            } else {
+                // In Progress Actions
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     Button(
-                        onClick = { onUpdateStatus("in_production") },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B82F6)),
-                        shape = RoundedCornerShape(12.dp)
+                        onClick = onSubmitDraft,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366))
                     ) {
-                        Text("للمطبعة 🟢", fontSize = 12.sp)
+                        Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("إرسال المسودة للإدارة", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    OutlinedButton(
+                        onClick = onOpenChat,
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(Icons.Default.Chat, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("المحادثة", fontSize = 12.sp)
                     }
                 }
             }
         }
     }
+}
+
+@Composable
+fun DesignerEarningsTab(orders: List<OrderItem>) {
+    val completedOrders = orders.filter { it.status == OrderStatus.COMPLETED }
+    val totalEarnings = completedOrders.sumOf { it.designerFee }
+    val pendingEarnings = orders.filter { it.status != OrderStatus.COMPLETED && it.status != OrderStatus.CANCELLED }.sumOf { it.designerFee }
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+        contentPadding = PaddingValues(bottom = 80.dp)
+    ) {
+        // Summary Cards
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Card(
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFDCFCE7))
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Text("الأرباح المعتمدة والمستلمة", fontSize = 11.sp, color = Color(0xFF166534))
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("${totalEarnings.toInt()} ر.ي", fontWeight = FontWeight.ExtraBold, fontSize = 18.sp, color = Color(0xFF14532D))
+                        Text("${completedOrders.size} طلبات منجزة", fontSize = 10.sp, color = Color(0xFF166534))
+                    }
+                }
+
+                Card(
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF3C7))
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Text("أرباح قيد التنفيذ", fontSize = 11.sp, color = Color(0xFF92400E))
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("${pendingEarnings.toInt()} ر.ي", fontWeight = FontWeight.ExtraBold, fontSize = 18.sp, color = Color(0xFF78350F))
+                        Text("تُقيد بعد الاستلام النهائي", fontSize = 10.sp, color = Color(0xFF92400E))
+                    }
+                }
+            }
+        }
+
+        item {
+            Text(
+                text = "سجل العمليات والمستحقات الفردية:",
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp
+            )
+        }
+
+        if (orders.isEmpty()) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(
+                        text = "لا توجد عمليات مسجلة حتى الآن",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.padding(16.dp),
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        }
+
+        items(orders, key = { it.id }) { order ->
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "طلب ${order.displayOrderNumber}",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
+                        Text(
+                            text = order.designType.ifBlank { "تصميم" },
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
+                        Text(
+                            text = if (order.status == OrderStatus.COMPLETED) "مكتمل ومعتمد ✓" else "قيد العمل والتنفيذ",
+                            fontSize = 11.sp,
+                            color = if (order.status == OrderStatus.COMPLETED) Color(0xFF16A34A) else Color(0xFFD97706)
+                        )
+                    }
+
+                    Text(
+                        text = "${order.designerFee.toInt()} ر.ي",
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 15.sp,
+                        color = Color(0xFF16A34A)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun DesignerPortfolioShortcutTab(onNavigateToPortfolio: (() -> Unit)?) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(Icons.Default.Collections, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(60.dp))
+            Spacer(modifier = Modifier.height(14.dp))
+            Text(
+                text = "معرض نماذج الأعمال",
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "يمكنك إضافة تصاميمك المميزة وإدارتها في المعرض العام لعرضها على العملاء وجذب طلبات جديدة.",
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.outline,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(18.dp))
+            Button(
+                onClick = { onNavigateToPortfolio?.invoke() },
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("الانتقال إلى معرض الأعمال")
+            }
+        }
+    }
+}
+
+@Composable
+fun DesignerRejectDialog(
+    order: OrderItem,
+    onConfirmReject: (reason: String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val reasons = listOf(
+        "ضغط عمل حالي وعدم التفرغ",
+        "الموعد الزمني للتسليم غير كافٍ",
+        "الطلب خارج نطاق التخصص الفني",
+        "ظرف شخصي طارئ"
+    )
+    var selectedReason by remember { mutableStateOf(reasons.first()) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "الاعتذار عن الطلب ${order.displayOrderNumber}",
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp
+            )
+        },
+        text = {
+            Column {
+                Text(
+                    text = "يرجى تحديد سبب الاعتذار لتوثيقه وإعادة إسناد الطلب لمصمم بديل:",
+                    fontSize = 13.sp
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+
+                reasons.forEach { r ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { selectedReason = r }
+                            .padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = if (selectedReason == r) Icons.Default.RadioButtonChecked else Icons.Default.RadioButtonUnchecked,
+                            contentDescription = null,
+                            tint = if (selectedReason == r) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(text = r, fontSize = 12.sp)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onConfirmReject(selectedReason) },
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Text("تأكيد الاعتذار", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            OutlinedButton(onClick = onDismiss, shape = RoundedCornerShape(10.dp)) {
+                Text("تراجع")
+            }
+        }
+    )
 }

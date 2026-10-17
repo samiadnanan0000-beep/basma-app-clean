@@ -184,6 +184,36 @@ fun BasmaAppRoot(
     val isGuestMode by mainViewModel.isGuestMode.collectAsState()
     val isAppLocked by mainViewModel.isAppLocked.collectAsState()
 
+    val appVersion by mainViewModel.appVersion.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    if (appVersion.latest_version_code > 1 && appVersion.apk_download_url.isNotBlank()) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { if (!appVersion.is_mandatory) { /* can dismiss */ } },
+            title = {
+                androidx.compose.material3.Text("تحديث جديد متاح 🚀", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+            },
+            text = {
+                androidx.compose.material3.Text(
+                    if (appVersion.release_notes.isNotBlank()) appVersion.release_notes
+                    else "يتوفر إصدار جديد ومحسن من تطبيق بصمة. يرجى التحديث للمتابعة."
+                )
+            },
+            confirmButton = {
+                androidx.compose.material3.Button(
+                    onClick = {
+                        try {
+                            val browserIntent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(appVersion.apk_download_url))
+                            context.startActivity(browserIntent)
+                        } catch (_: Exception) {}
+                    }
+                ) {
+                    androidx.compose.material3.Text("تحديث التطبيق الآن", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                }
+            }
+        )
+    }
+
     if (currentUser == null && userProfile == null && !isGuestMode) {
         AuthScreen(
             onAuthSuccess = { user, phone ->

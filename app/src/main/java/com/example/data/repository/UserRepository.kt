@@ -2,6 +2,9 @@ package com.example.data.repository
 
 import android.content.Context
 import android.util.Log
+import com.example.data.model.AppConfig
+import com.example.data.model.AppVersionConfig
+import com.example.data.model.DesignerUpgradeRequest
 import com.example.data.model.UserProfile
 import com.example.util.OperationType
 import com.example.util.getFirestoreInstance
@@ -19,6 +22,8 @@ import kotlinx.coroutines.tasks.await
 class UserRepository(private val context: Context) {
     private val db: FirebaseFirestore = getFirestoreInstance(context)
     private val usersRef = db.collection("users")
+    private val settingsRef = db.collection("settings")
+    private val designerRequestsRef = db.collection("designer_requests")
 
     val auth: FirebaseAuth? = try {
         if (FirebaseApp.getApps(context).isEmpty()) {
@@ -110,7 +115,7 @@ class UserRepository(private val context: Context) {
         val authResult = authInstance.createUserWithEmailAndPassword(cleanEmail, password).await()
         val firebaseUser = authResult.user ?: throw IllegalStateException("فشل إنشاء المستخدم في Firebase")
 
-        // 2. Immediately send official email verification
+        // 2. Immediately send official email verification in background
         try {
             firebaseUser.sendEmailVerification().await()
             Log.d("UserRepository", "Verification email sent successfully to $cleanEmail")
@@ -121,6 +126,7 @@ class UserRepository(private val context: Context) {
         // 3. Evaluate Super Admin credentials
         val isSuperAdmin = isSuperAdminCredentials(cleanName, cleanEmail, cleanPhone)
         val role = if (isSuperAdmin) ROLE_ADMIN else ROLE_CLIENT
+        val isActivated = isSuperAdmin // Super admin is auto-activated; clients activate via WhatsApp
 
         val userUid = firebaseUser.uid
         val profile = UserProfile(
@@ -128,7 +134,8 @@ class UserRepository(private val context: Context) {
             name = cleanName,
             phone = cleanPhone,
             email = cleanEmail,
-            role = role
+            role = role,
+            isAccountActivated = isActivated
         )
 
         // 4. Save to Firestore users collection
@@ -139,6 +146,9 @@ class UserRepository(private val context: Context) {
                 "email" to profile.email,
                 "phone" to profile.phone,
                 "role" to profile.role,
+                "isAccountActivated" to profile.isAccountActivated,
+                "activeTasksCount" to 0,
+                "ratingAverage" to 5.0f,
                 "createdAt" to FieldValue.serverTimestamp()
             )
             docRef.set(payload).await()
@@ -198,7 +208,8 @@ class UserRepository(private val context: Context) {
             name = if (isSuperAdmin) SUPER_ADMIN_NAME else (firebaseUser.displayName ?: "عميل بصمة"),
             email = cleanEmail,
             phone = firebaseUser.phoneNumber.orEmpty(),
-            role = role
+            role = role,
+            isAccountActivated = isSuperAdmin
         )
 
         try {
@@ -207,6 +218,9 @@ class UserRepository(private val context: Context) {
                 "email" to newProfile.email,
                 "phone" to newProfile.phone,
                 "role" to newProfile.role,
+                "isAccountActivated" to newProfile.isAccountActivated,
+                "activeTasksCount" to 0,
+                "ratingAverage" to 5.0f,
                 "createdAt" to FieldValue.serverTimestamp()
             )
             docRef.set(payload).await()
@@ -250,12 +264,16 @@ class UserRepository(private val context: Context) {
                     existing.role.uppercase() == ROLE_DESIGNER -> ROLE_DESIGNER
                     else -> ROLE_CLIENT
                 }
-                if (finalRole != existing.role || (phone.isNotBlank() && existing.phone.isBlank())) {
-                    val updates = mutableMapOf<String, Any>("role" to finalRole)
-                    if (phone.isNotBlank()) updates["phone"] = phone
+                val activated = isSuperAdmin || existing.isAccountActivated
+                val updates = mutableMapOf<String, Any>()
+                if (finalRole != existing.role) updates["role"] = finalRole
+                if (phone.isNotBlank() && existing.phone.isBlank()) updates["phone"] = phone
+                if (activated != existing.isAccountActivated) updates["isAccountActivated"] = activated
+
+                if (updates.isNotEmpty()) {
                     docRef.update(updates).await()
                 }
-                existing.copy(role = finalRole, phone = if (phone.isNotBlank()) phone else existing.phone)
+                existing.copy(role = finalRole, phone = if (phone.isNotBlank()) phone else existing.phone, isAccountActivated = activated)
             } else {
                 val newRole = if (isSuperAdmin) ROLE_ADMIN else ROLE_CLIENT
                 val profile = UserProfile(
@@ -263,13 +281,17 @@ class UserRepository(private val context: Context) {
                     name = firebaseUser.displayName ?: if (isSuperAdmin) SUPER_ADMIN_NAME else "عميل جديد",
                     email = email,
                     phone = phone,
-                    role = newRole
+                    role = newRole,
+                    isAccountActivated = isSuperAdmin
                 )
                 val payload = hashMapOf(
                     "name" to profile.name,
                     "email" to profile.email,
                     "phone" to profile.phone,
                     "role" to profile.role,
+                    "isAccountActivated" to profile.isAccountActivated,
+                    "activeTasksCount" to 0,
+                    "ratingAverage" to 5.0f,
                     "createdAt" to FieldValue.serverTimestamp()
                 )
                 docRef.set(payload).await()
@@ -282,7 +304,8 @@ class UserRepository(private val context: Context) {
                 name = firebaseUser.displayName ?: if (isSuperAdmin) SUPER_ADMIN_NAME else "مستخدم بصمة",
                 email = email,
                 phone = phone,
-                role = if (isSuperAdmin) ROLE_ADMIN else ROLE_CLIENT
+                role = if (isSuperAdmin) ROLE_ADMIN else ROLE_CLIENT,
+                isAccountActivated = isSuperAdmin
             )
         }
     }
@@ -295,7 +318,7 @@ class UserRepository(private val context: Context) {
             }
             if (snapshot != null && snapshot.exists()) {
                 val profile = snapshot.toObject(UserProfile::class.java)
-                trySend(profile)
+                trySend(profile?.copy(uid = snapshot.id))
             } else {
                 trySend(null)
             }
@@ -324,5 +347,108 @@ class UserRepository(private val context: Context) {
         } catch (e: Exception) {
             handleFirestoreError(e, OperationType.UPDATE, "users/$targetUid")
         }
+    }
+
+    suspend fun toggleAccountActivation(targetUid: String, isActivated: Boolean) {
+        try {
+            usersRef.document(targetUid).update("isAccountActivated", isActivated).await()
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.UPDATE, "users/$targetUid")
+        }
+    }
+
+    // --- Designer Requests ---
+    suspend fun submitDesignerUpgradeRequest(request: DesignerUpgradeRequest): Boolean {
+        return try {
+            val payload = hashMapOf(
+                "userId" to request.userId,
+                "userName" to request.userName,
+                "userPhone" to request.userPhone,
+                "userEmail" to request.userEmail,
+                "experienceAreas" to request.experienceAreas,
+                "portfolioUrl" to request.portfolioUrl,
+                "notes" to request.notes,
+                "status" to "PENDING",
+                "createdAt" to FieldValue.serverTimestamp()
+            )
+            designerRequestsRef.add(payload).await()
+            true
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.CREATE, "designer_requests")
+            false
+        }
+    }
+
+    fun observeDesignerUpgradeRequests(): Flow<List<DesignerUpgradeRequest>> = callbackFlow {
+        val listener = designerRequestsRef.addSnapshotListener { snapshot, error ->
+            if (error != null) {
+                handleFirestoreError(error, OperationType.LIST, "designer_requests")
+                return@addSnapshotListener
+            }
+            val list = snapshot?.documents?.mapNotNull { doc ->
+                doc.toObject(DesignerUpgradeRequest::class.java)?.copy(id = doc.id)
+            }.orEmpty()
+            trySend(list)
+        }
+        awaitClose { listener.remove() }
+    }
+
+    suspend fun approveDesignerUpgrade(requestId: String, targetUserId: String) {
+        try {
+            usersRef.document(targetUserId).update("role", ROLE_DESIGNER).await()
+            designerRequestsRef.document(requestId).update("status", "APPROVED").await()
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.UPDATE, "designer_requests/$requestId")
+        }
+    }
+
+    // --- App Config & Settings ---
+    fun observeAppConfig(): Flow<AppConfig> = callbackFlow {
+        val docRef = settingsRef.document("app_config")
+        val listener = docRef.addSnapshotListener { snapshot, error ->
+            if (error != null) {
+                handleFirestoreError(error, OperationType.READ, "settings/app_config")
+                return@addSnapshotListener
+            }
+            val config = if (snapshot != null && snapshot.exists()) {
+                snapshot.toObject(AppConfig::class.java) ?: AppConfig()
+            } else {
+                AppConfig()
+            }
+            trySend(config)
+        }
+        awaitClose { listener.remove() }
+    }
+
+    suspend fun updateAppConfig(config: AppConfig) {
+        try {
+            val payload = hashMapOf(
+                "whatsappNumber" to config.whatsappNumber,
+                "platformCommissionPercentage" to config.platformCommissionPercentage,
+                "beneficiaryName" to config.beneficiaryName,
+                "beneficiaryAccount" to config.beneficiaryAccount
+            )
+            settingsRef.document("app_config").set(payload).await()
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.UPDATE, "settings/app_config")
+        }
+    }
+
+    // --- App Version & Update Checker ---
+    fun observeAppVersion(): Flow<AppVersionConfig> = callbackFlow {
+        val docRef = settingsRef.document("app_version")
+        val listener = docRef.addSnapshotListener { snapshot, error ->
+            if (error != null) {
+                handleFirestoreError(error, OperationType.READ, "settings/app_version")
+                return@addSnapshotListener
+            }
+            val ver = if (snapshot != null && snapshot.exists()) {
+                snapshot.toObject(AppVersionConfig::class.java) ?: AppVersionConfig()
+            } else {
+                AppVersionConfig()
+            }
+            trySend(ver)
+        }
+        awaitClose { listener.remove() }
     }
 }

@@ -1,7 +1,6 @@
 package com.example.ui.screens
 
-import android.content.Intent
-import android.net.Uri
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -23,16 +22,17 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.DoneAll
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.Print
-import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Payment
+import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
+import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -40,6 +40,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -62,8 +63,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.data.model.ChatMessage
 import com.example.data.model.OrderItem
+import com.example.data.model.OrderStatus
+import com.example.data.model.PaymentStatus
+import com.example.ui.components.AdvancePaymentDialog
 import com.example.ui.viewmodel.OrderViewModel
+import com.example.util.WhatsAppHelper
 
 @Composable
 fun OrderTrackingScreen(
@@ -73,44 +79,39 @@ fun OrderTrackingScreen(
     val context = LocalContext.current
     val orders by orderViewModel.orders.collectAsState()
 
-    var rejectionOrder by remember { mutableStateOf<OrderItem?>(null) }
-    var rejectionNotes by remember { mutableStateOf("") }
+    var paymentOrder by remember { mutableStateOf<OrderItem?>(null) }
+    var isFinalPaymentTarget by remember { mutableStateOf(false) }
 
-    if (rejectionOrder != null) {
-        AlertDialog(
-            onDismissRequest = { rejectionOrder = null },
-            title = { Text("طلب تعديلات على البروفة", fontWeight = FontWeight.Bold) },
-            text = {
-                Column {
-                    Text("أدخل التعديلات والملاحظات المطلوبة لإرسالها للمصمم:")
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = rejectionNotes,
-                        onValueChange = { rejectionNotes = it },
-                        label = { Text("الملاحظات والتعديلات") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
+    var chatOrder by remember { mutableStateOf<OrderItem?>(null) }
+    var ratingOrder by remember { mutableStateOf<OrderItem?>(null) }
+
+    if (paymentOrder != null) {
+        AdvancePaymentDialog(
+            order = paymentOrder!!,
+            orderViewModel = orderViewModel,
+            isFinalPayment = isFinalPaymentTarget,
+            onDismiss = { paymentOrder = null },
+            onPaymentSubmitted = { paymentOrder = null }
+        )
+    }
+
+    if (chatOrder != null) {
+        OrderChatDialog(
+            order = chatOrder!!,
+            orderViewModel = orderViewModel,
+            onDismiss = { chatOrder = null }
+        )
+    }
+
+    if (ratingOrder != null) {
+        OrderRatingDialog(
+            order = ratingOrder!!,
+            onSubmit = { rating, review ->
+                orderViewModel.rateOrder(ratingOrder!!.id, ratingOrder!!.assignedDesignerId, rating, review)
+                ratingOrder = null
+                Toast.makeText(context, "شكراً لتقييمك! نسعى دائماً لتقديم الأفضل.", Toast.LENGTH_SHORT).show()
             },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        val order = rejectionOrder
-                        if (order != null && rejectionNotes.isNotBlank()) {
-                            orderViewModel.rejectProof(order, rejectionNotes)
-                            rejectionOrder = null
-                            rejectionNotes = ""
-                        }
-                    }
-                ) {
-                    Text("إرسال التعديل")
-                }
-            },
-            dismissButton = {
-                OutlinedButton(onClick = { rejectionOrder = null }) {
-                    Text("إلغاء")
-                }
-            }
+            onDismiss = { ratingOrder = null }
         )
     }
 
@@ -134,6 +135,7 @@ fun OrderTrackingScreen(
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onBackground
                 )
+                Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = "يمكنك تقديم طلب تصميم جديد للبدء بالتسعير والمتابعة",
                     style = MaterialTheme.typography.bodyMedium,
@@ -165,7 +167,7 @@ fun OrderTrackingScreen(
                     color = MaterialTheme.colorScheme.onBackground
                 )
                 Text(
-                    text = "تتبع مراحل الإنتاج واعتماد بروفات التصاميم في الوقت الفعلي",
+                    text = "تتبع مراحل التسعير، الدفعات المالية، وتنفيذ التصاميم لحظة بلحظة",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
                 )
@@ -174,12 +176,25 @@ fun OrderTrackingScreen(
             items(orders, key = { it.id }) { order ->
                 OrderTrackingCard(
                     order = order,
-                    onApproveProof = { orderViewModel.approveProof(order) },
-                    onRequestRevisions = { rejectionOrder = order },
+                    onOpenPayment = { isFinal ->
+                        isFinalPaymentTarget = isFinal
+                        paymentOrder = order
+                    },
+                    onAcceptQuote = {
+                        orderViewModel.clientAcceptQuote(order.id)
+                        isFinalPaymentTarget = false
+                        paymentOrder = order
+                    },
+                    onCancelOrder = {
+                        orderViewModel.clientCancelOrder(order.id)
+                    },
+                    onOpenChat = { chatOrder = order },
+                    onOpenRating = { ratingOrder = order },
                     onContactWhatsApp = {
-                        val message = "مرحباً بصمة، أود الاستفسار عن طلبي رقم #${order.id.take(6)} (${order.brandText})"
-                        val uri = Uri.parse("https://wa.me/967771051177?text=${Uri.encode(message)}")
-                        context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+                        WhatsAppHelper.openChat(
+                            context = context,
+                            message = "مرحباً إدارة بصمة، بخصوص طلبي ${order.displayOrderNumber} (${order.designType}):"
+                        )
                     }
                 )
             }
@@ -190,8 +205,11 @@ fun OrderTrackingScreen(
 @Composable
 fun OrderTrackingCard(
     order: OrderItem,
-    onApproveProof: () -> Unit,
-    onRequestRevisions: () -> Unit,
+    onOpenPayment: (isFinal: Boolean) -> Unit,
+    onAcceptQuote: () -> Unit,
+    onCancelOrder: () -> Unit,
+    onOpenChat: () -> Unit,
+    onOpenRating: () -> Unit,
     onContactWhatsApp: () -> Unit
 ) {
     Card(
@@ -201,7 +219,7 @@ fun OrderTrackingCard(
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
-            // Header Row: Order Title & Status Badge
+            // Header Row: Order Number & Status Badge
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -209,168 +227,259 @@ fun OrderTrackingCard(
             ) {
                 Column {
                     Text(
-                        text = order.brandText.ifBlank { order.category },
+                        text = order.designType.ifBlank { order.category },
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "طلب #${order.id.take(6)} • ${order.category}",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        text = "طلب ${order.displayOrderNumber}",
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
 
-                StatusBadge(status = order.status)
+                StatusBadge(status = order.status, paymentStatus = order.advancePaymentStatus)
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            // 4-Stage Visual Pipeline Line
-            OrderStatusPipeline(currentStatus = order.status)
+            // Technical Specs Summary
+            if (order.detailedSpecs.isNotBlank()) {
+                Text(
+                    text = order.detailedSpecs,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                    maxLines = 3
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+            }
 
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // Details summary (Dimensions, Material)
+            // Dimensions and deadline banner
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .padding(12.dp),
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Column {
-                    Text("الأبعاد", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
-                    Text("${order.width}م × ${order.height}م", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold))
-                }
-                Column {
-                    Text("الخامة", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
-                    Text(order.materialName.ifBlank { "افتراضية" }, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold))
-                }
-                Column {
-                    Text("السعر الإجمالي", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+                if (order.width > 0 && order.height > 0) {
                     Text(
-                        if (order.price > 0) "${order.price.toInt()} ${order.currency}" else "بانتظار التسعير",
-                        style = MaterialTheme.typography.bodyMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = if (order.price > 0) Color(0xFF10B981) else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        text = "المقاس: ${order.width}م × ${order.height}م",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                } else {
+                    Text("المقاس: حسب التصميم", fontSize = 12.sp)
+                }
+
+                if (!order.estimatedDeliveryTime.isNullOrBlank()) {
+                    Text(
+                        text = "التسليم: ${order.estimatedDeliveryTime}",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
             }
 
-            // Proof Inspection Card (if uploaded by designer)
-            if (order.proofUrl.isNotBlank()) {
+            // 1. Quoting Card if status is PRICE_OFFERED
+            if (order.status == OrderStatus.PRICE_OFFERED) {
                 Spacer(modifier = Modifier.height(14.dp))
                 Card(
+                    modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF6FF))
                 ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Image, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("بروفة التصميم للمعاينة", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                            }
-                            if (order.proofApproved) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.Verified, contentDescription = null, tint = Color(0xFF10B981), modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("معتمد من قبلك", color = Color(0xFF10B981), fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                }
-                            }
-                        }
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Text(
+                            text = "عرض السعر المعتمد من الإدارة 💰",
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF1E40AF),
+                            fontSize = 14.sp
+                        )
 
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(160.dp)
-                                .clip(RoundedCornerShape(12.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            AsyncImage(
-                                model = order.proofUrl,
-                                contentDescription = "بروفة التصميم",
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
-                            // Watermark Badge
-                            Box(
-                                modifier = Modifier
-                                    .align(Alignment.BottomEnd)
-                                    .padding(8.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(Color.Black.copy(alpha = 0.6f))
-                                    .padding(horizontal = 8.dp, vertical = 4.dp)
-                            ) {
-                                Text("بصمة للدعاية • بروفة للمعاينة", color = Color.White, fontSize = 10.sp)
-                            }
+                            Text("إجمالي تكلفة الطلب:", fontSize = 13.sp)
+                            Text("${order.effectiveTotal.toInt()} ر.ي", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         }
 
-                        if (!order.proofApproved) {
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Button(
-                                    onClick = onApproveProof,
-                                    modifier = Modifier.weight(1f),
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("اعتماد التصميم والبدء", fontSize = 13.sp)
-                                }
+                        Spacer(modifier = Modifier.height(6.dp))
 
-                                OutlinedButton(
-                                    onClick = onRequestRevisions,
-                                    modifier = Modifier.weight(1f),
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("طلب تعديل", fontSize = 13.sp)
-                                }
+                        // Advance 70% highlight
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color(0xFF2563EB).copy(alpha = 0.12f))
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "الدفعة المقدمة المطلوبة (70%):",
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF1E40AF),
+                                fontSize = 13.sp
+                            )
+                            Text(
+                                text = "${order.calculatedAdvance.toInt()} ر.ي",
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color(0xFF1D4ED8),
+                                fontSize = 16.sp
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("المبلغ المتبقي عند التسليم (30%):", fontSize = 12.sp, color = Color.Gray)
+                            Text("${order.calculatedRemaining.toInt()} ر.ي", fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = Color.Gray)
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = onAcceptQuote,
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
+                            ) {
+                                Text("الموافقة وبدء السداد", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            }
+
+                            OutlinedButton(
+                                onClick = onCancelOrder,
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Text("إلغاء الطلب", color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
                             }
                         }
                     }
                 }
             }
 
+            // 2. Button for WAITING_FOR_ADVANCE (if advance not submitted yet or rejected)
+            if (order.status == OrderStatus.WAITING_FOR_ADVANCE && order.advancePaymentStatus != PaymentStatus.UNDER_REVIEW) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Button(
+                    onClick = { onOpenPayment(false) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB))
+                ) {
+                    Icon(Icons.Default.Payment, contentDescription = null, tint = Color.White)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("سداد الدفعة المقدمة (70%): ${order.calculatedAdvance.toInt()} ر.ي", fontWeight = FontWeight.Bold)
+                }
+            }
+
+            // 3. Notice if advance payment under review
+            if (order.advancePaymentStatus == PaymentStatus.UNDER_REVIEW) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF3C7))
+                ) {
+                    Text(
+                        text = "تم إرسال إشعار الدفعة المقدمة (70%)، سيتم مراجعة التحويل وتأكيد بدء العمل في أقرب وقت.",
+                        fontSize = 12.sp,
+                        color = Color(0xFF92400E),
+                        modifier = Modifier.padding(10.dp),
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+
+            // 4. Sample Review via WhatsApp Badge
+            if (order.status == OrderStatus.SAMPLE_REVIEW || order.status == OrderStatus.IN_PROGRESS) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF0FDF4))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF16A34A), modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "الطلب قيد إعداد ومراجعة العينة عبر واتساب المنصة مع الإدارة",
+                            fontSize = 12.sp,
+                            color = Color(0xFF15803D),
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+
+            // 5. Button for final 30% payment
+            if (order.status == OrderStatus.WAITING_FOR_FINAL_PAYMENT && order.finalPaymentStatus != PaymentStatus.UNDER_REVIEW) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Button(
+                    onClick = { onOpenPayment(true) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
+                ) {
+                    Icon(Icons.Default.Payment, contentDescription = null, tint = Color.White)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("سداد الدفعة النهائية المتبقية (30%): ${order.calculatedRemaining.toInt()} ر.ي", fontWeight = FontWeight.Bold)
+                }
+            }
+
+            // 6. Rating prompt if completed
+            if (order.status == OrderStatus.COMPLETED && order.clientRating == 0f) {
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedButton(
+                    onClick = onOpenRating,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFFF59E0B))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("تقييم جودة الخدمة والمصمم", fontWeight = FontWeight.Bold)
+                }
+            }
+
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Action Buttons
+            // Action row: In-App Chat & WhatsApp
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 OutlinedButton(
-                    onClick = onContactWhatsApp,
+                    onClick = onOpenChat,
                     modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(14.dp)
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Icon(Icons.Default.Chat, contentDescription = null, tint = Color(0xFF25D366), modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.Chat, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("مراسلة واتساب", fontSize = 13.sp)
+                    Text("محادثة الطلب", fontSize = 12.sp)
                 }
 
-                if (order.status == "quoted" && !order.proofApproved) {
-                    Button(
-                        onClick = onApproveProof,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                    ) {
-                        Text("موافقة وبدء التنفيذ", fontSize = 13.sp)
-                    }
+                OutlinedButton(
+                    onClick = onContactWhatsApp,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("واتساب الإدارة", fontSize = 12.sp, color = Color(0xFF16A34A), fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -378,12 +487,18 @@ fun OrderTrackingCard(
 }
 
 @Composable
-fun StatusBadge(status: String) {
+fun StatusBadge(status: String, paymentStatus: String) {
     val (label, bg, fg) = when (status) {
-        "pending" -> Triple("قيد التسعير 🟡", Color(0xFFFEF3C7), Color(0xFF92400E))
-        "quoted" -> Triple("تم التسعير 🔵", Color(0xFFDBEAFE), Color(0xFF1E40AF))
-        "in_production" -> Triple("قيد التنفيذ 🟢", Color(0xFFD1FAE5), Color(0xFF065F46))
-        "completed" -> Triple("جاهز للتسليم 🏁", Color(0xFFEDE9FE), Color(0xFF5B21B6))
+        OrderStatus.PENDING_PRICING -> Triple("بانتظار التسعير 🟡", Color(0xFFFEF3C7), Color(0xFF92400E))
+        OrderStatus.PRICE_OFFERED -> Triple("تم تحديد السعر 🔵", Color(0xFFDBEAFE), Color(0xFF1E40AF))
+        OrderStatus.WAITING_FOR_ADVANCE -> Triple("بانتظار سداد الـ 70% 💳", Color(0xFFEDE9FE), Color(0xFF6D28D9))
+        OrderStatus.WAITING_FOR_ASSIGNMENT -> Triple("بانتظار الإسناد ⏳", Color(0xFFE0E7FF), Color(0xFF3730A3))
+        OrderStatus.PENDING_DESIGNER_ACCEPTANCE -> Triple("بانتظار قبول المصمم 🎨", Color(0xFFFCE7F3), Color(0xFF9D174D))
+        OrderStatus.IN_PROGRESS -> Triple("قيد التنفيذ 🟢", Color(0xFFD1FAE5), Color(0xFF065F46))
+        OrderStatus.SAMPLE_REVIEW -> Triple("مراجعة العينة 🔍", Color(0xFFCCFBF1), Color(0xFF115E59))
+        OrderStatus.WAITING_FOR_FINAL_PAYMENT -> Triple("سداد الـ 30% 🏁", Color(0xFFFEF08A), Color(0xFF854D0E))
+        OrderStatus.COMPLETED -> Triple("مكتمل ومسلّم ✅", Color(0xFFDCFCE7), Color(0xFF166534))
+        OrderStatus.CANCELLED -> Triple("ملغي ❌", Color(0xFFFEE2E2), Color(0xFF991B1B))
         else -> Triple(status, Color.LightGray, Color.DarkGray)
     }
 
@@ -393,73 +508,223 @@ fun StatusBadge(status: String) {
             .background(bg)
             .padding(horizontal = 10.dp, vertical = 4.dp)
     ) {
-        Text(text = label, color = fg, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+        Text(text = label, color = fg, fontWeight = FontWeight.Bold, fontSize = 11.sp)
     }
 }
 
 @Composable
-fun OrderStatusPipeline(currentStatus: String) {
-    val stages = listOf(
-        "pending" to "المراجعة",
-        "quoted" to "التسعير",
-        "in_production" to "المطبعة",
-        "completed" to "جاهز"
-    )
+fun OrderChatDialog(
+    order: OrderItem,
+    orderViewModel: OrderViewModel,
+    onDismiss: () -> Unit
+) {
+    val chatMessages by orderViewModel.observeChatMessages(order.id).collectAsState(initial = emptyList())
+    var messageText by remember { mutableStateOf("") }
+    var warningMessage by remember { mutableStateOf<String?>(null) }
 
-    val currentIndex = when (currentStatus) {
-        "pending" -> 0
-        "quoted" -> 1
-        "in_production" -> 2
-        "completed" -> 3
-        else -> 0
-    }
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        stages.forEachIndexed { index, pair ->
-            val isPassed = index <= currentIndex
-            val isCurrent = index == currentIndex
-
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.weight(1f)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(28.dp)
-                        .clip(CircleShape)
-                        .background(
-                            if (isPassed) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.surfaceVariant
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (isPassed) {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    } else {
-                        Text(
-                            text = "${index + 1}",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.height(4.dp))
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Column {
                 Text(
-                    text = pair.second,
+                    text = "محادثة الطلب ${order.displayOrderNumber}",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp
+                )
+                Text(
+                    text = "محادثة نصية آمنة ومراقبة (يُمنع تبادل أرقام الهواتف)",
                     fontSize = 11.sp,
-                    fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
-                    color = if (isPassed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                    color = MaterialTheme.colorScheme.outline
                 )
             }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(350.dp)
+            ) {
+                // Warning if bypass detected
+                if (warningMessage != null) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text(
+                            text = warningMessage ?: "",
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(8.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                }
+
+                // Messages list
+                LazyColumn(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                        .padding(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (chatMessages.isEmpty()) {
+                        item {
+                            Text(
+                                text = "لا توجد رسائل سابقة. يمكنك كتابة استفسارك الفني هنا.",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.outline,
+                                modifier = Modifier.padding(16.dp),
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                    items(chatMessages) { msg ->
+                        Card(
+                            shape = RoundedCornerShape(10.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                        ) {
+                            Column(modifier = Modifier.padding(8.dp)) {
+                                Text(
+                                    text = msg.senderName.ifBlank { "مستخدم" },
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Text(text = msg.text, fontSize = 13.sp)
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Input Row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = messageText,
+                        onValueChange = {
+                            messageText = it
+                            warningMessage = null
+                        },
+                        placeholder = { Text("اكتب رسالتك هنا...") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    IconButton(
+                        onClick = {
+                            if (messageText.isNotBlank()) {
+                                val msg = ChatMessage(
+                                    senderId = order.clientId,
+                                    senderName = order.clientName,
+                                    senderRole = "CLIENT",
+                                    text = messageText.trim()
+                                )
+                                orderViewModel.sendChatMessage(order.id, msg) { success, err ->
+                                    if (success) {
+                                        messageText = ""
+                                        warningMessage = null
+                                    } else {
+                                        warningMessage = err ?: "تعذر إرسال الرسالة"
+                                    }
+                                }
+                            }
+                        },
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary)
+                    ) {
+                        Icon(Icons.Default.Send, contentDescription = "إرسال", tint = Color.White)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onDismiss, shape = RoundedCornerShape(10.dp)) {
+                Text("إغلاق")
+            }
         }
-    }
+    )
+}
+
+@Composable
+fun OrderRatingDialog(
+    order: OrderItem,
+    onSubmit: (rating: Float, review: String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var rating by remember { mutableStateOf(5) }
+    var reviewText by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "تقييم الخدمة والتصميم ⭐",
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp,
+                textAlign = TextAlign.Center
+            )
+        },
+        text = {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = "طلب ${order.displayOrderNumber} - ${order.designType}",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.outline
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // 5 Stars row
+                Row(
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    (1..5).forEach { star ->
+                        IconButton(onClick = { rating = star }) {
+                            Icon(
+                                imageVector = if (star <= rating) Icons.Default.Star else Icons.Default.StarBorder,
+                                contentDescription = null,
+                                tint = Color(0xFFF59E0B),
+                                modifier = Modifier.size(32.dp)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                OutlinedTextField(
+                    value = reviewText,
+                    onValueChange = { reviewText = it },
+                    placeholder = { Text("أضف تعليقك حول جودة وسرعة التنفيذ (اختياري)...") },
+                    minLines = 3,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onSubmit(rating.toFloat(), reviewText.trim()) },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Text("إرسال التقييم", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            OutlinedButton(onClick = onDismiss, shape = RoundedCornerShape(10.dp)) {
+                Text("تخطي")
+            }
+        }
+    )
 }

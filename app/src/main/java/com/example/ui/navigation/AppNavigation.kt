@@ -257,14 +257,11 @@ fun AppNavigation(
                 Screen.DESIGNER_HUB -> DesignerHubScreen(
                     mainViewModel = mainViewModel,
                     orderViewModel = orderViewModel,
-                    onNavigateToCalculator = { currentScreen = Screen.CALCULATOR },
-                    onNavigateToMaterials = { currentScreen = Screen.MATERIALS },
-                    onNavigateToPartners = { currentScreen = Screen.PARTNERS },
-                    onNavigateToAdminDashboard = { currentScreen = Screen.ADMIN_DASHBOARD },
                     onNavigateToPortfolio = { currentScreen = Screen.PORTFOLIO }
                 )
                 Screen.ADMIN_DASHBOARD -> AdminDashboardScreen(
-                    mainViewModel = mainViewModel
+                    mainViewModel = mainViewModel,
+                    orderViewModel = orderViewModel
                 )
                 Screen.CALCULATOR -> SignageCalculatorScreen(
                     calculatorViewModel = calculatorViewModel
